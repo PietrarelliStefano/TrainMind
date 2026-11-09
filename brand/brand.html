@@ -1,0 +1,236 @@
+<title>TrainMind Brand</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: manuale a una colonna su griglia 64 (la stessa dell'icona); sezioni con etichetta a sinistra su schermi larghi */
+:root{
+  --bg:#ECEFE9; --surface:#FAFBF7; --ink:#16211B; --muted:#56645B; --line:#CDD5CA;
+  --green:#1D6A46; --green-soft:#D5E8DC; --amber:#9A6A12;
+  --tile:#161a1f; --tile-green:#4DB582; --tile-amber:#e6ad46; --tile-ink:#E5E8EC;
+  --md-rec:#3C7BA3; --md-ten:#B2402B; --md-dur:#1D6A46; --md-vel:#B58010; --md-att:#6A58A6; --md-match:#D9581A;
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"Source Sans 3","Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1612; --surface:#17211B; --ink:#E4ECE6; --muted:#93A399; --line:#2B3A31;
+  --green:#4DB582; --green-soft:#1D3528; --amber:#e6ad46;
+  --md-rec:#6AA9D2; --md-ten:#E57560; --md-dur:#4DB582; --md-vel:#E0B040; --md-att:#A291DB; --md-match:#F0874A;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1612; --surface:#17211B; --ink:#E4ECE6; --muted:#93A399; --line:#2B3A31;
+  --green:#4DB582; --green-soft:#1D3528; --amber:#e6ad46;
+  --md-rec:#6AA9D2; --md-ten:#E57560; --md-dur:#4DB582; --md-vel:#E0B040; --md-att:#A291DB; --md-match:#F0874A;
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:16px/1.55 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 64px}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:56px}
+h1,h2,h3{font-family:var(--f-display);text-transform:uppercase;line-height:1.02;margin:0;text-wrap:balance}
+h2{font-size:1.9rem;font-weight:700;letter-spacing:.01em}
+h3{font-size:1.2rem;font-weight:700;letter-spacing:.02em}
+p{margin:0;max-width:65ch}
+.lbl{font-family:var(--f-mono);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.mono{font-family:var(--f-mono);font-size:.82rem}
+.muted{color:var(--muted)}
+section{display:grid;grid-template-columns:200px minmax(0,1fr);gap:24px;border-top:1px solid var(--line);padding-top:24px}
+section>header{display:flex;flex-direction:column;gap:6px}
+.body{display:flex;flex-direction:column;gap:20px;min-width:0}
+@media (max-width:760px){section{grid-template-columns:minmax(0,1fr);gap:16px}}
+
+/* Hero */
+.hero{display:grid;grid-template-columns:auto minmax(0,1fr);gap:28px;align-items:center}
+.hero svg.icon{width:132px;height:132px;display:block}
+.word{font-family:var(--f-display);font-weight:800;font-size:clamp(3.2rem,11vw,6.4rem);letter-spacing:.01em;line-height:.9;text-transform:uppercase}
+.word b{font-weight:800;color:var(--green)}
+.tag{font-family:var(--f-display);font-weight:600;font-size:clamp(1.3rem,3.6vw,1.8rem);text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-top:10px}
+.hero p{margin-top:14px}
+@media (max-width:560px){.hero{grid-template-columns:minmax(0,1fr)}.hero svg.icon{width:96px;height:96px}}
+
+/* Anatomy */
+.anat{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:24px;align-items:center}
+@media (max-width:760px){.anat{grid-template-columns:minmax(0,1fr)}}
+.anat svg{width:100%;max-width:440px;height:auto;display:block}
+.legend{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.legend li{display:grid;grid-template-columns:64px minmax(0,1fr);gap:12px;align-items:baseline}
+.legend .k{font-family:var(--f-mono);font-size:.8rem;font-weight:500}
+
+/* Family */
+.family{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
+.app{display:flex;flex-direction:column;gap:10px}
+.app svg{width:72px;height:72px;display:block}
+.app .nm{font-family:var(--f-display);font-weight:800;font-size:1.5rem;text-transform:uppercase;line-height:1}
+.app .nm b{font-weight:800}
+.app.future svg{opacity:.55}
+.app.future .nm{color:var(--muted)}
+.pill{align-self:flex-start;font-family:var(--f-mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.pill.live{border-color:var(--green);color:var(--green)}
+
+/* Swatches */
+.sw{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.chip{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.chip i{display:block;height:64px}
+.chip div{padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.chip strong{font-size:.92rem}
+.md{display:flex;flex-wrap:wrap;gap:8px}
+.md span{font-family:var(--f-mono);font-size:.78rem;font-weight:500;padding:4px 10px;border-radius:4px;color:#fff}
+
+/* Type */
+.type{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.spec{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.spec .s1{font-family:var(--f-display);font-weight:800;font-size:2.4rem;text-transform:uppercase;line-height:1}
+.spec .s2{font-family:var(--f-body);font-size:1.2rem}
+.spec .s3{font-family:var(--f-mono);font-size:1rem}
+
+/* Usage */
+.use{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.case{display:flex;flex-direction:column;gap:8px}
+.stage{border:1px solid var(--line);border-radius:8px;background:var(--surface);height:120px;display:flex;align-items:center;justify-content:center;gap:14px}
+.stage.dark{background:#0f1215;border-color:#0f1215}
+.stage.no{position:relative}
+.stage.no::after{content:"";position:absolute;inset:0;background:linear-gradient(to top right,transparent calc(50% - 1px),var(--md-ten) 50%,transparent calc(50% + 1px));opacity:.6;border-radius:8px}
+.case p{font-size:.92rem}
+
+.voice{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.voice div{display:flex;flex-direction:column;gap:6px}
+.voice q{font-family:var(--f-display);font-weight:600;font-size:1.25rem;quotes:none;text-transform:uppercase;letter-spacing:.02em}
+.files{width:100%;border-collapse:collapse;font-size:.92rem}
+.files td{padding:8px 10px;border-top:1px solid var(--line);vertical-align:top}
+.files td:first-child{font-family:var(--f-mono);font-size:.8rem;white-space:nowrap}
+.tw{overflow-x:auto}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="tm" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#161a1f"/><g fill="none" stroke="#4DB582" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="16" width="48" height="32" rx="2"/><polyline points="13,41 21,29 29,23 37,31 45,37"/></g><circle cx="51" cy="25" r="3.6" fill="#4DB582"/></symbol>
+    <symbol id="mm" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#161a1f"/><g fill="none" stroke="#e6ad46" stroke-width="3.5"><rect x="8" y="16" width="48" height="32" rx="2"/><line x1="32" y1="16" x2="32" y2="48"/><circle cx="32" cy="32" r="6"/><rect x="8" y="24" width="8" height="16"/><rect x="48" y="24" width="8" height="16"/></g></symbol>
+    <symbol id="sm" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#161a1f"/><g fill="none" stroke="#5b97ff" stroke-width="3.5" stroke-linecap="round"><rect x="8" y="16" width="48" height="32" rx="2"/><circle cx="29" cy="31" r="7"/><line x1="34" y1="36" x2="40" y2="42"/></g></symbol>
+    <symbol id="bm" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#161a1f"/><g fill="none" stroke="#e5e8ec" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="16" width="48" height="32" rx="2"/><path d="M16 40 Q28 22 44 28"/><polyline points="39,23 44,28 38,31"/></g></symbol>
+    <symbol id="cm" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#161a1f"/><g fill="none" stroke="#c98bd9" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="16" width="48" height="32" rx="2"/><path d="M24 24 h16 v9 q0 8 -8 10 q-8 -2 -8 -10 z"/></g></symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+
+  <div class="hero">
+    <svg class="icon" role="img" aria-label="Icona TrainMind"><use href="#tm"/></svg>
+    <div>
+      <div class="lbl">Suite Mind · manuale del marchio · v1 · novembre 2026</div>
+      <div class="word">Train<b>Mind</b></div>
+      <div class="tag">La settimana, pensata.</div>
+      <p class="muted">TrainMind programma e gestisce la settimana di allenamento: morfociclo, sedute, carichi, squadre e formazione. È l'app di campo della suite Mind, accanto a MatchMind che analizza la partita.</p>
+    </div>
+  </div>
+
+  <section>
+    <header><span class="lbl">01</span><h2>Il marchio</h2></header>
+    <div class="body">
+      <div class="anat">
+        <svg viewBox="0 0 300 220" role="img" aria-label="Anatomia dell'icona: campo, curva del carico del morfociclo e partita">
+          <rect x="30" y="40" width="240" height="160" rx="10" fill="none" stroke="var(--green)" stroke-width="10"/>
+          <polyline points="55,165 95,105 135,75 175,115 215,145" fill="none" stroke="var(--green)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="245" cy="85" r="15" fill="var(--md-match)"/>
+          <g font-family="JetBrains Mono, monospace" font-size="11" font-weight="500" text-anchor="middle">
+            <text x="55" y="190" fill="var(--md-rec)">MD+1</text>
+            <text x="95" y="92" fill="var(--md-ten)">MD-5</text>
+            <text x="135" y="62" fill="var(--md-dur)">MD-3</text>
+            <text x="175" y="140" fill="var(--md-vel)">MD-2</text>
+            <text x="215" y="170" fill="var(--md-att)">MD-1</text>
+            <text x="245" y="62" fill="var(--md-match)">MD</text>
+          </g>
+          <text x="30" y="24" font-family="JetBrains Mono, monospace" font-size="11" fill="var(--muted)">griglia 64 · tratto 3.5 · raggio 14</text>
+        </svg>
+        <ul class="legend">
+          <li><span class="k">Campo</span><span>Il rettangolo del terreno di gioco. È lo stesso in tutte le icone della suite: dice che si parla di calcio.</span></li>
+          <li><span class="k">Curva</span><span>Il carico del morfociclo: recupero dopo la gara, tensione, durata (il picco), velocità, attivazione. È la periodizzazione tattica disegnata.</span></li>
+          <li><span class="k">Punto</span><span>La partita del sabato. Tutta la settimana va verso quel punto.</span></li>
+        </ul>
+      </div>
+      <p class="muted">Nell'icona reale la curva e il punto hanno lo stesso verde; qui i punti sono colorati come i giorni MD dell'app per mostrare cosa rappresentano.</p>
+    </div>
+  </section>
+
+  <section>
+    <header><span class="lbl">02</span><h2>La suite</h2></header>
+    <div class="body">
+      <p>Le app Mind condividono tre cose: il riquadro scuro, il campo disegnato a linee e il nome <span class="mono">[OGGETTO]MIND</span> in Barlow Condensed. Cambiano il contenuto del campo e il colore d'accento, che resta uno solo per app.</p>
+      <div class="family">
+        <div class="app"><svg role="img" aria-label="Icona MatchMind"><use href="#mm"/></svg><div class="nm">Match<b style="color:var(--amber)">Mind</b></div><span class="pill live">In uso</span><span class="muted">Analisi video della partita</span></div>
+        <div class="app"><svg role="img" aria-label="Icona TrainMind"><use href="#tm"/></svg><div class="nm">Train<b style="color:var(--green)">Mind</b></div><span class="pill live">In uso</span><span class="muted">Programmazione della settimana</span></div>
+        <div class="app future"><svg role="img" aria-label="Icona ScoutMind (proposta)"><use href="#sm"/></svg><div class="nm">ScoutMind</div><span class="pill">Proposta</span><span class="muted">Report su giocatori e avversari</span></div>
+        <div class="app future"><svg role="img" aria-label="Icona BoardMind (proposta)"><use href="#bm"/></svg><div class="nm">BoardMind</div><span class="pill">Proposta</span><span class="muted">Lavagna e animazioni tattiche</span></div>
+        <div class="app future"><svg role="img" aria-label="Icona ClubMind (proposta)"><use href="#cm"/></svg><div class="nm">ClubMind</div><span class="pill">Proposta</span><span class="muted">Società, budget e sponsor</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <header><span class="lbl">03</span><h2>Colori</h2></header>
+    <div class="body">
+      <div class="sw">
+        <div class="chip"><i style="background:#4DB582"></i><div><strong>Verde campo</strong><span class="mono muted">#4DB582</span><span class="muted">Accento su scuro e nell'icona</span></div></div>
+        <div class="chip"><i style="background:#1D6A46"></i><div><strong>Verde profondo</strong><span class="mono muted">#1D6A46</span><span class="muted">Accento su chiaro, pulsanti</span></div></div>
+        <div class="chip"><i style="background:#161a1f"></i><div><strong>Lavagna</strong><span class="mono muted">#161A1F</span><span class="muted">Fondo dell'icona, comune alla suite</span></div></div>
+        <div class="chip"><i style="background:#ECEFE9"></i><div><strong>Gesso</strong><span class="mono muted">#ECEFE9</span><span class="muted">Fondo chiaro dell'app</span></div></div>
+        <div class="chip"><i style="background:#0F1612"></i><div><strong>Notte</strong><span class="mono muted">#0F1612</span><span class="muted">Fondo scuro dell'app</span></div></div>
+        <div class="chip"><i style="background:#e6ad46"></i><div><strong>Ambra</strong><span class="mono muted">#E6AD46</span><span class="muted">Solo MatchMind</span></div></div>
+      </div>
+      <div class="lbl">Colori dei giorni (casacche del morfociclo)</div>
+      <div class="md">
+        <span style="background:#3C7BA3">MD+1 recupero</span><span style="background:#B2402B">MD-5 tensione</span><span style="background:#1D6A46">MD-3 durata</span><span style="background:#946A0E">MD-2 velocità</span><span style="background:#6A58A6">MD-1 attivazione</span><span style="background:#C24F17">MD partita</span>
+      </div>
+      <p class="muted">I colori MD servono solo a riconoscere i giorni (calendario, carichi, PDF). Non si usano per decorare.</p>
+    </div>
+  </section>
+
+  <section>
+    <header><span class="lbl">04</span><h2>Caratteri</h2></header>
+    <div class="body">
+      <div class="type">
+        <div class="spec"><span class="lbl">Titoli · Barlow Condensed 700/800</span><span class="s1">MD-3 Durata</span><span class="muted">Sempre maiuscolo. Nome dell'app, titoli, giorni.</span></div>
+        <div class="spec"><span class="lbl">Testo · Source Sans 3 400/600</span><span class="s2">Possesso 7c7+3 jolly, 40×35 m, 4 serie da 4'.</span><span class="muted">Descrizioni, consigli, interfaccia.</span></div>
+        <div class="spec"><span class="lbl">Dati · JetBrains Mono 400/500</span><span class="s3">RPE 6 × 90' = 540 UA</span><span class="muted">Carichi, misure, numeri in colonna.</span></div>
+      </div>
+      <p class="muted">MatchMind usa Barlow Condensed per i titoli e Inter per il testo: la famiglia dei titoli è il filo comune della suite.</p>
+    </div>
+  </section>
+
+  <section>
+    <header><span class="lbl">05</span><h2>Uso</h2></header>
+    <div class="body">
+      <div class="use">
+        <div class="case"><div class="stage"><svg width="48" height="48"><use href="#tm"/></svg><svg width="32" height="32"><use href="#tm"/></svg><svg width="16" height="16"><use href="#tm"/></svg></div><h3>Dimensioni</h3><p class="muted">Icona da 16 px in su. Sotto i 24 px il campo resta leggibile, i dettagli della curva meno: va bene per favicon e menu.</p></div>
+        <div class="case"><div class="stage dark"><svg width="56" height="56"><use href="#tm"/></svg><span style="font-family:var(--f-display);font-weight:800;font-size:1.9rem;color:#E5E8EC">TRAIN<span style="color:#4DB582">MIND</span></span></div><h3>Su fondo scuro</h3><p class="muted">Nome bianco, MIND in verde campo. Area di rispetto attorno al marchio pari a un quarto dell'icona.</p></div>
+        <div class="case"><div class="stage no"><svg width="56" height="56" style="transform:rotate(-12deg)"><use href="#tm"/></svg><span style="font-family:var(--f-body);font-size:1.5rem;font-style:italic;color:#B58010">TrainMind</span></div><h3>Da evitare</h3><p class="muted">Icona ruotata o ricolorata, nome in un altro carattere o in corsivo, due colori d'accento nello stesso marchio.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <header><span class="lbl">06</span><h2>Voce</h2></header>
+    <div class="body">
+      <div class="voice">
+        <div><q>La settimana, pensata.</q><span class="muted">Payoff di TrainMind. Fa coppia con «La partita, letta.» per MatchMind.</span></div>
+        <div><q>Parla come in spogliatoio</q><span class="muted">Italiano, frasi brevi, lessico del campo: seduta, reparto, transizione, jolly. Niente gergo da software.</span></div>
+        <div><q>Numeri sempre veri</q><span class="muted">Misure del campo, giocatori, minuti e carichi scritti per esteso. Se un dato manca, lo si dice.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <header><span class="lbl">07</span><h2>File</h2></header>
+    <div class="body">
+      <div class="tw"><table class="files">
+        <tr><td>trainmind-icon.svg</td><td>Icona a colori su riquadro (app, favicon, Dock)</td></tr>
+        <tr><td>trainmind-icon-mono.svg</td><td>Icona a un colore senza riquadro (prende il colore del testo)</td></tr>
+        <tr><td>trainmind-logo-dark.svg</td><td>Icona + nome per fondi scuri</td></tr>
+        <tr><td>trainmind-logo-light.svg</td><td>Icona + nome per fondi chiari</td></tr>
+        <tr><td>tokens.css</td><td>Colori e caratteri della suite come variabili CSS</td></tr>
+        <tr><td>BRAND.md</td><td>Queste regole in testo, per chi sviluppa</td></tr>
+      </table></div>
+      <p class="muted">Si trovano nella cartella <span class="mono">trainmind/brand/</span> del branch <span class="mono">trainmind</span> nel repository di MatchMind.</p>
+    </div>
+  </section>
+
+</div>

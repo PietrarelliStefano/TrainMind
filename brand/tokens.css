@@ -1,0 +1,19 @@
+/* Suite "Mind": token comuni + accento di TrainMind */
+:root{
+  /* Comuni a tutta la suite */
+  --mind-tile:#161a1f;          /* fondo dell'icona, uguale per ogni app */
+  --mind-ink:#e5e8ec;           /* testo su scuro */
+  --mind-slate:#0f1215;         /* fondo scuro */
+  --mind-stroke:3.5;            /* spessore linee icona su griglia 64 */
+  --mind-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;  /* 700/800, maiuscolo */
+
+  /* Accenti per app */
+  --matchmind:#e6ad46;          /* ambra: la partita, il video */
+  --trainmind:#4DB582;          /* verde campo: l'allenamento (su scuro) */
+  --trainmind-deep:#1D6A46;     /* verde su fondi chiari, bianco sopra 6:1 */
+  --trainmind-soft:#D5E8DC;
+
+  /* Colori MD del morfociclo (TrainMind) */
+  --md-rec:#3C7BA3; --md-ten:#B2402B; --md-dur:#1D6A46;
+  --md-vel:#B58010; --md-att:#6A58A6; --md-match:#D9581A;
+}
