@@ -11,7 +11,7 @@ App della suite Mind per programmare e gestire la settimana di allenamento: morf
   - `board.js`: lavagna (schemi degli esercizi, disegno, editor).
   - `app.js`: interfaccia, AI, squadre, formazione, PDF.
   - `style.css`, `body.html`.
-- `brand/`: logo e regole del marchio (`BRAND.md`, manuale visivo in `brand.html`). In `brand/proposte/` le nuove proposte di logo, ancora da scegliere.
+- `brand/`: logo e regole del marchio (`BRAND.md`, manuale visivo in `brand.html`).
 
 ## Costruzione
 La pagina è l'unione dei sorgenti: `<head>` (titolo, font, jsPDF da cdnjs) + `<style>` con `style.css` + `body.html` + `<script>` con `core.js` e `board.js` + `<script>` con `app.js`.
