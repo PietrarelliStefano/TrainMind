@@ -27,7 +27,7 @@ async function boot(){
     const err=e=>{clearTimeout(timer);S.dbState='err';render();console.warn(e)};
     db.doc('squadra/classifica').onSnapshot(s=>{S.classifica=s.exists?s.data():null;render()},()=>{});
     db.doc('squadra/info').onSnapshot(s=>{if(s.exists)S.team={...DEFAULT_TEAM,...s.data(),principi:{...DEFAULT_TEAM.principi,...(s.data().principi||{})}};if(!s.metadata.fromCache)done('info');render()},err);
-    db.collection('giocatori').onSnapshot(q=>{S.players=q.docs.map(d=>({...d.data(),id:d.id}));if(!q.metadata.fromCache)done('giocatori');render()},err);
+    db.collection('giocatori').onSnapshot(q=>{S.players=q.docs.map(d=>({...d.data(),id:d.id}));if(!q.metadata.fromCache){done('giocatori');autoReturns()}render()},err);
     db.collection('settimane').onSnapshot(q=>{const w={};q.docs.forEach(d=>{const x={...d.data(),id:d.id};if(Array.isArray(x.sessioni))x.sessioni=x.sessioni.map(o=>o&&o.md?{...o,md:normMd(o.md),titolo:String(o.titolo||'').replace(/MD-[456]\b/g,normMd)}:o);w[d.id]=x});S.weeks=w;if(!q.metadata.fromCache)done('settimane');render()},err);
     db.collection('partite').onSnapshot(q=>{S.matches=q.docs.map(d=>({...d.data(),id:d.id}));if(!q.metadata.fromCache)done('partite');render()},err);
     db.collection('esercizi').onSnapshot(q=>{S.drills=q.docs.map(d=>({...d.data(),id:d.id}));if(!q.metadata.fromCache)done('esercizi');render()},err);
@@ -395,6 +395,14 @@ function rosterOn(dateIso){return sortPlayers(S.players).map(p=>{const st=p.stat
   else if(p.rientratoIl&&(parseIso(dateIso)-parseIso(p.rientratoIl))/864e5>=0&&(parseIso(dateIso)-parseIso(p.rientratoIl))/864e5<=14){k='rientro';why='rientrato il '+fmtDay(parseIso(p.rientratoIl))+(p.rientratoDa?' ('+p.rientratoDa+')':'')}
   if(st==='acciaccato'){k='limitato';why='acciaccato'}
   return {p,k,why:why+(p.note&&k!=='ok'?' · '+p.note:'')}})}
+/* Il giorno del rientro il giocatore torna disponibile da solo */
+function autoReturns(){const today=todayIso();const back=[];
+  S.players.forEach(p=>{const st=p.stato||'disponibile';if(st==='disponibile'||!p.rientro||p.rientro>today)return;
+    if(OUT_STATI.includes(st)){p.rientratoIl=p.rientro;p.rientratoDa=STATI[st][0].toLowerCase()}
+    p.stato='disponibile';p.rientro='';back.push(p);const {id,...rest}=p;put('giocatori',id,rest)});
+  if(back.length){render();toast((back.length===1?'Torna disponibile: ':'Tornano disponibili: ')+back.map(p=>cogNome(p)).join(', '))}}
+setInterval(()=>{if(S.players&&S.players.length)autoReturns()},30*60*1000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.players&&S.players.length)autoReturns()});
 function markReturn(p,oldSt,newSt){if(OUT_STATI.includes(oldSt||'')&&!OUT_STATI.includes(newSt||'disponibile')){p.rientratoIl=todayIso();p.rientratoDa=STATI[oldSt][0].toLowerCase()}else if(OUT_STATI.includes(newSt)){delete p.rientratoIl;delete p.rientratoDa}}
 function presentIds(s){return Array.isArray(s.presenti)&&s.presenti.length?s.presenti:S.players.filter(p=>!p.stato||p.stato==='disponibile'||p.stato==='acciaccato').map(p=>p.id)}
 /* --- duttilità: categorie di ruolo e fabbisogno per sistema --- */
