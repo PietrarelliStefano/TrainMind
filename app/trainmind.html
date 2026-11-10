@@ -557,6 +557,7 @@ const posFull=p=>[p.pos1||p.posizione||RUOLI[p.ruolo]||'',p.pos2?'alt. '+p.pos2:
 const shortName=p=>{const t=String(p.nome||'').trim().split(/\s+/);return t.length>1?t.slice(1).join(' '):t[0]||'?'};
 const ora=d=>{const o=team().orari||{};return o[d]||o[String(d)]||''};
 const cognome=p=>{const t=String(p.nome||'').trim().split(/\s+/);return t.length>1?t.slice(1).join(' '):t[0]||''};
+const cogNome=p=>{const t=String(p.nome||'').trim().split(/\s+/);return t.length>1?t.slice(1).join(' ')+' '+t[0]:t[0]||''};
 const sortPlayers=a=>[...a].sort((x,y)=>cognome(x).localeCompare(cognome(y),'it',{sensitivity:'base'})||String(x.nome).localeCompare(String(y.nome),'it'));
 const mdChip=md=>md?`<span class="md ${mdClass(md)}">${esc(normMd(md))}</span>`:'';
 const FASI=['attivazione','iniziale','centrale','condizionale','finale'];
@@ -1337,7 +1338,7 @@ function vRosa(){
   return `<p class="muted">${S.players.length} giocatori · ${cnt('disponibile')} disponibili${cnt('infortunato')?' · '+cnt('infortunato')+' infortunati':''}${cnt('acciaccato')?' · '+cnt('acciaccato')+' acciaccati':''}${cnt('squalificato')?' · '+cnt('squalificato')+' squalificati':''}</p>
   <div class="chips">${[['tutti','Tutti'],...Object.entries(RUOLI)].map(([k,l])=>`<button class="chip" aria-pressed="${S.rosaFilter===k}" data-act="rosaF" data-k="${k}">${l}</button>`).join('')}</div>
   ${pl.length?`<div class="card tbl" style="padding:6px 10px"><table><thead><tr><th>Giocatore</th><th>Ruolo</th><th>Stato</th><th>Presenze</th><th>Note</th><th></th></tr></thead><tbody>
-  ${pl.map(p=>{const a=attendance(p.id);return `<tr><td><b>${esc(p.nome)}</b> <span class="muted num">${esc(p.nascita||'')}</span></td><td>${esc(p.pos1||p.posizione||RUOLI[p.ruolo]||'')}${p.pos2?` <span class="muted">· alt. ${esc(p.pos2)}</span>`:''}${p.piede?` <span class="muted">· ${esc(p.piede)}</span>`:''}${p.sottoruolo?`<div class="muted" style="font-size:.8rem">${esc(p.sottoruolo)}</div>`:''}</td>
+  ${pl.map(p=>{const a=attendance(p.id);return `<tr><td><b>${esc(cogNome(p))}</b> <span class="muted num">${esc(p.nascita||'')}</span></td><td>${esc(p.pos1||p.posizione||RUOLI[p.ruolo]||'')}${p.pos2?` <span class="muted">· alt. ${esc(p.pos2)}</span>`:''}${p.piede?` <span class="muted">· ${esc(p.piede)}</span>`:''}${p.sottoruolo?`<div class="muted" style="font-size:.8rem">${esc(p.sottoruolo)}</div>`:''}</td>
    <td><select data-act-change="plStato" data-id="${p.id}" aria-label="Stato di ${esc(p.nome)}">${Object.entries(STATI).map(([k,[l]])=>`<option value="${k}" ${(p.stato||'disponibile')===k?'selected':''}>${l}</option>`).join('')}</select></td>
    <td class="num" style="white-space:nowrap">${a?`<span class="bar"><i style="width:${a.pct}%"></i></span>${a.pct}%`:'<span class="muted">—</span>'}</td><td class="muted" style="max-width:240px;font-size:.85rem">${esc(p.note||'')}${p.rientro?` <span class="pill">rientro ${fmtDay(parseIso(p.rientro))}</span>`:''}</td><td><button class="btn sm" data-act="plEdit" data-id="${p.id}">Modifica</button></td></tr>`}).join('')}
   </tbody></table></div>`:`<div class="empty">Nessun giocatore${S.rosaFilter!=='tutti'?' in questo ruolo':''}.</div>`}`;
