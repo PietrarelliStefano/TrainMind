@@ -28,7 +28,7 @@ async function boot(){
     db.doc('squadra/classifica').onSnapshot(s=>{S.classifica=s.exists?s.data():null;render()},()=>{});
     db.doc('squadra/info').onSnapshot(s=>{if(s.exists)S.team={...DEFAULT_TEAM,...s.data(),principi:{...DEFAULT_TEAM.principi,...(s.data().principi||{})}};if(!s.metadata.fromCache)done('info');render()},err);
     db.collection('giocatori').onSnapshot(q=>{S.players=q.docs.map(d=>({...d.data(),id:d.id}));if(!q.metadata.fromCache)done('giocatori');render()},err);
-    db.collection('settimane').onSnapshot(q=>{const w={};q.docs.forEach(d=>w[d.id]={...d.data(),id:d.id});S.weeks=w;if(!q.metadata.fromCache)done('settimane');render()},err);
+    db.collection('settimane').onSnapshot(q=>{const w={};q.docs.forEach(d=>{const x={...d.data(),id:d.id};if(Array.isArray(x.sessioni))x.sessioni=x.sessioni.map(o=>o&&o.md?{...o,md:normMd(o.md),titolo:String(o.titolo||'').replace(/MD-[456]\b/g,normMd)}:o);w[d.id]=x});S.weeks=w;if(!q.metadata.fromCache)done('settimane');render()},err);
     db.collection('partite').onSnapshot(q=>{S.matches=q.docs.map(d=>({...d.data(),id:d.id}));if(!q.metadata.fromCache)done('partite');render()},err);
     db.collection('esercizi').onSnapshot(q=>{S.drills=q.docs.map(d=>({...d.data(),id:d.id}));if(!q.metadata.fromCache)done('esercizi');render()},err);
   }catch(e){S.dbState='off';render()}
@@ -50,7 +50,7 @@ const shortName=p=>{const t=String(p.nome||'').trim().split(/\s+/);return t.leng
 const ora=d=>{const o=team().orari||{};return o[d]||o[String(d)]||''};
 const cognome=p=>{const t=String(p.nome||'').trim().split(/\s+/);return t.length>1?t.slice(1).join(' '):t[0]||''};
 const sortPlayers=a=>[...a].sort((x,y)=>cognome(x).localeCompare(cognome(y),'it',{sensitivity:'base'})||String(x.nome).localeCompare(String(y.nome),'it'));
-const mdChip=md=>md?`<span class="md ${mdClass(md)}">${esc(md)}</span>`:'';
+const mdChip=md=>md?`<span class="md ${mdClass(md)}">${esc(normMd(md))}</span>`:'';
 const FASI=['attivazione','iniziale','centrale','condizionale','finale'];
 const STATI_GRUPPO=['','Motivato e in fiducia','Euforico dopo una vittoria','Giù dopo una sconfitta','Stanco o poco brillante','Teso o nervoso','Poco concentrato','Poco unito'];
 const gkDefault=(d)=>{const t=team();const g=t.prepPortieri||'a volte';return g==='sempre'||(g==='a volte'&&(t.gkDays||[]).map(Number).includes(Number(d)))};
@@ -185,8 +185,8 @@ function multiWeekChart(){
 /* ===== AI: progettazione della settimana ===== */
 const METODO=`METODOLOGIA (Periodizzazione Tattica, morfociclo standard):
 - Il Modello di gioco guida tutto: ogni esercizio allena principi e sotto-principi del modello, in modo specifico (con palla, avversari, direzione di gioco quando possibile).
-- Alternanza orizzontale dei carichi rispetto alla partita (MD): MD+1 recupero; MD-4 Tensione (spazi ridotti, alta densità di duelli, contrazioni intense, sotto-principi); MD-3 Durata (spazi ampi, numeri vicini all'11c11, grandi principi, giorno più carico); MD-2 Velocità (spazi ampi, bassa densità, esecuzioni rapide, recuperi completi, volume ridotto); MD-1 Attivazione (volume basso, palle inattive, strategia).
-  Con 3 sedute: MD-5 ripresa + tensione, MD-3 durata, MD-2 velocità + palle inattive + strategia sull'avversario.
+- Alternanza orizzontale dei carichi rispetto alla partita (MD): MD+1 recupero; MD+2 / MD+3 Tensione (si contano i giorni dalla partita giocata) (spazi ridotti, alta densità di duelli, contrazioni intense, sotto-principi); MD-3 Durata (spazi ampi, numeri vicini all'11c11, grandi principi, giorno più carico); MD-2 Velocità (spazi ampi, bassa densità, esecuzioni rapide, recuperi completi, volume ridotto); MD-1 Attivazione (volume basso, palle inattive, strategia).
+  Con 3 sedute: MD+2 ripresa + tensione, MD-3 durata, MD-2 velocità + palle inattive + strategia sull'avversario.
 - Monitoraggio del carico con sRPE (RPE CR-10 x minuti = UA): variazioni settimanali entro il 10-15%, monotonia sotto 2.
 - Progressione complessa: dal semplice al complesso, dai sotto-principi ai principi, collegando l'obiettivo settimanale alla partita precedente e all'avversario.
 - Lavora sulla distanza tra il modello (VOGLIO) e il comportamento attuale (OGGI LA SQUADRA): parti dalle fasi con priorità alta, scegli sotto-principi raggiungibili da dove la squadra è oggi e costruisci esercizi in cui il comportamento voluto è conveniente e quello attuale viene punito dalle regole.`;
@@ -197,7 +197,7 @@ function numRule(w,giorni){return `NUMERI (vincolo obbligatorio, verifica i cont
 - In ogni esercizio: giocatori in campo + jolly + gruppi in rotazione = giocatori di movimento presenti quel giorno (nessuno senza compito). Dichiara dove sono i portieri (in porta, come jolly, con il preparatore).
 - I reparti rispettano il sistema dell'esercizio; la squadra avversaria simulata usa il proprio sistema.
 - Nel campo "giocatori" scrivi i numeri esatti e il totale, es. "9c9 + 2 P = 20" oppure "6+P contro 6, 6 in rotazione ogni 3' = 18 + 2 P". Lo schema contiene esattamente quei giocatori.`}
-const APP_TYPES=[['rondo','Rondo','pratica di campo: rondo 4c1 8x8 ≈ 13, 5c2 12x12 ≈ 20, posizionale 2+2c2+2 24x12 ≈ 36'],['possesso','Possesso / gioco di posizione (senza porte)','6c6 posizionale ≈ 75; giochi ridotti ≈ 90; senza portieri ≈ 165 per la corsa intensa di gara (adulti, Riboli 2020)'],['tensione','Tensione (MD-5/MD-4): giochi ridotti con porte, duelli','spazi stretti: alta densità di accelerazioni, frenate e duelli'],['durata','Durata (MD-3): giochi e lavori di reparto ampi','150-210 m² per riprodurre le distanze di gara negli U15-U19 (Riboli 2022)'],['velocita','Velocità (MD-2): spazi ampi, pochi giocatori','≈ 210 m² per lo sprint negli U15-U19; ≈ 300 per esposizione allo sprint'],['partita','Partita finale / a tema','11c11 su campo intero ≈ 320 m² per giocatore']];
+const APP_TYPES=[['rondo','Rondo','pratica di campo: rondo 4c1 8x8 ≈ 13, 5c2 12x12 ≈ 20, posizionale 2+2c2+2 24x12 ≈ 36'],['possesso','Possesso / gioco di posizione (senza porte)','6c6 posizionale ≈ 75; giochi ridotti ≈ 90; senza portieri ≈ 165 per la corsa intensa di gara (adulti, Riboli 2020)'],['tensione','Tensione (MD+2/MD+3): giochi ridotti con porte, duelli','spazi stretti: alta densità di accelerazioni, frenate e duelli'],['durata','Durata (MD-3): giochi e lavori di reparto ampi','150-210 m² per riprodurre le distanze di gara negli U15-U19 (Riboli 2022)'],['velocita','Velocità (MD-2): spazi ampi, pochi giocatori','≈ 210 m² per lo sprint negli U15-U19; ≈ 300 per esposizione allo sprint'],['partita','Partita finale / a tema','11c11 su campo intero ≈ 320 m² per giocatore']];
 const APP_DEF={rondo:[8,35],possesso:[50,150],tensione:[60,120],durata:[150,250],velocita:[200,320],partita:[120,320]};
 const appRanges=()=>({...APP_DEF,...(team().app||{})});
 function appType(e,md){const n=((e.nome||'')+' '+(e.giocatori||'')).toLowerCase();if(e.fase==='attivazione'||e.fase==='condizionale')return null;if(/angol|punizion|palle inattive|piazzat|tiro|cross|finalizz|strategia 11c0|11c0|a secco|prevenzion|duell|1c1|2c1|a ondate|sprint/.test(n))return null;
@@ -225,7 +225,7 @@ function designRule(){return `PRINCIPI DI PROGETTAZIONE (basati sull'evidenza, o
 - Per ogni esercizio compila "vincoli": le regole usate e l'effetto atteso in campo (es. "2 tocchi → circolazione veloce; campo lungo 40x30 → attacco della profondità; gol doppio dopo recupero in 5" → riaggressione").`}
 function appRule(){const r=appRanges();return `SPAZIO PER GIOCATORE (m² = area del campo / giocatori in quel campo, portieri inclusi se in porta; con 2 campi conta un campo): rispetta questi intervalli per tipo di lavoro: ${APP_TYPES.map(([k,l])=>`${l} ${r[k][0]}-${r[k][1]}`).join('; ')}. Riferimenti: sotto ~150 m² per giocatore i giochi non riproducono la corsa ad alta velocità di gara, ~200-210 m² per lo sprint (Riboli et al. 2022, U15-U19); i giochi senza portieri richiedono meno spazio di quelli con portieri a parità di intensità. Scrivi sempre lo spazio come "AxB m" e aggiungi il calcolo, es. "30x25 m (≈ 83 m² per giocatore)".`}
 function condRule(){const t=team();if(t.prepAtletico==='si')return '';return `LAVORO CONDIZIONALE (non c'è preparatore atletico, lo pianifichi tu): distribuisci nella settimana forza, prevenzione, resistenza e velocità coerenti con il giorno MD, preferendo il lavoro integrato con palla (rapporto lavoro/recupero, dimensione del campo, numero di giocatori) e aggiungendo brevi blocchi a secco quando servono:
-- giorno di tensione/MD-5: forza e prevenzione infortuni (es. 8-10' a secco: nordic hamstring, adduttori Copenhagen, polpacci, core, salti e atterraggi) più giochi a campo ridotto ad alta intensità;
+- giorno di tensione/MD+2: forza e prevenzione infortuni (es. 8-10' a secco: nordic hamstring, adduttori Copenhagen, polpacci, core, salti e atterraggi) più giochi a campo ridotto ad alta intensità;
 - MD-3 (durata): resistenza specifica con blocchi lunghi in spazi ampi o intermittente a secco breve (es. 15"-15");
 - MD-2: velocità e accelerazioni brevi (sprint 10-20 m con recupero completo), volume basso.
 Per ogni esercizio compila "condizionale" con l'obiettivo fisico e i parametri (es. "intermittente 1' lavoro/1' recupero, alta intensità", "forza eccentrica ischiocrurali 3x6").`}
@@ -243,7 +243,7 @@ function staffRule(w){const t=team();const gk=t.prepPortieri||'a volte';const da
 - Per ogni esercizio compila "organizzazione": come preparare il campo, dove mettere i palloni, dove si posiziona l'allenatore e come passare all'esercizio successivo.`}
 function finRule(){const f=Number(team().partitaFinale??15);return f?`
 Ogni seduta TERMINA con una PARTITA (ultimo esercizio, fase "finale", nome che inizia con "Partita") di almeno ${f}': libera o a tema su un principio della seduta o della settimana, con numeri e portieri esatti. Dopo la partita al massimo un breve defaticamento.`:''}
-function attRule(){const a=Number(team().attivazione??10);return (a?`Ogni seduta inizia SEMPRE con l'esercizio di attivazione di ${a}' (fase "attivazione", mobilità e andature, senza schema): nel giorno di tensione/MD-5 con elasticità e balzi bassi, in MD-3 con andature ampie e allunghi, in MD-2/MD-1 con frequenza e partenze reattive. Gli altri esercizi coprono i minuti restanti.`:'')+finRule()}
+function attRule(){const a=Number(team().attivazione??10);return (a?`Ogni seduta inizia SEMPRE con l'esercizio di attivazione di ${a}' (fase "attivazione", mobilità e andature, senza schema): nel giorno di tensione/MD+2 con elasticità e balzi bassi, in MD-3 con andature ampie e allunghi, in MD-2/MD-1 con frequenza e partenze reattive. Gli altri esercizi coprono i minuti restanti.`:'')+finRule()}
 function teamContext(){
   const t=team();const pr=t.principi||{};const pl=S.players;const by=r=>pl.filter(p=>p.ruolo===r);
   const unav=pl.filter(p=>p.stato&&p.stato!=='disponibile').map(p=>`${p.nome} (${p.posizione||p.ruolo||''}, ${STATI[p.stato][0].toLowerCase()}${p.rientro?', rientro '+p.rientro:''}${p.note?', '+p.note:''})`);

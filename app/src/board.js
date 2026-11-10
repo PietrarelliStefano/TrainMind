@@ -6,7 +6,7 @@ const ATT={
  rapidita:{nome:'Attivazione: mobilità, andature e rapidità',descrizione:'Mobilità dinamica (3′). Andature brevi ad alta frequenza su 15 m: skip rapido, doppio appoggio, cambi di direzione (4′). 4 partenze reattive su 10 m a segnale (3′).',coaching:'Frequenza alta, primi passi corti ed esplosivi.'},
  leggera:{nome:'Attivazione: mobilità e andature leggere',descrizione:'Mobilità articolare (4′). Andature tecniche a ritmo blando (4′). 2 allunghi brevi (2′).',coaching:'Sciogliere, nessuna fretta.'}
 };
-const attKey=md=>({'MD-6':'forza','MD-5':'forza','MD-4':'forza','MD-3':'ampiezza','MD-2':'rapidita','MD-1':'rapidita'}[md]||'leggera');
+const attKey=md=>(md=normMd(md),{'MD+2':'forza','MD+3':'forza','MD-3':'ampiezza','MD-2':'rapidita','MD-1':'rapidita'}[md]||'leggera');
 function attSchema(){
   const el=[];[3,7.5,12,16.5].forEach(y=>{el.push({k:'cono',x:5,y},{k:'cono',x:25,y},{k:'A',x:2.5,y},{k:'corsa',x:6.5,y,x2:23.5,y2:y})});
   return {campo:'rett',w:30,h:20,el};

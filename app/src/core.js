@@ -11,27 +11,25 @@ const mondayOf=d=>{const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 function weekNo(d){const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const dn=(t.getUTCDay()+6)%7;t.setUTCDate(t.getUTCDate()-dn+3);const f=new Date(Date.UTC(t.getUTCFullYear(),0,4));return 1+Math.round(((t-f)/864e5-3+((f.getUTCDay()+6)%7))/7)}
 
-/* Etichetta MD rispetto al giorno partita (0=Lun … 6=Dom). Il giorno dopo la partita è MD+1; da lì si conta verso la successiva (MD-5 … MD-1). */
+/* Etichetta MD rispetto al giorno partita (0=Lun … 6=Dom). I primi tre giorni dopo la partita sono MD+1, MD+2, MD+3; poi si conta verso la successiva (MD-3, MD-2, MD-1). */
 function mdLabel(day,matchDay){
   if(matchDay==null||matchDay==='') return null;
-  let off=day-Number(matchDay);
-  if(off===0) return 'MD';
-  if(off<0&&off+7===1) return 'MD+1';
-  if(off>2) off-=7;
-  return off>0?'MD+'+off:'MD'+off;
+  const a=(((day-Number(matchDay))%7)+7)%7;
+  if(a===0) return 'MD';
+  return a<=3?'MD+'+a:'MD-'+(7-a);
 }
+/* Etichette salvate con la vecchia numerazione */
+const normMd=md=>({'MD-6':'MD+1','MD-5':'MD+2','MD-4':'MD+3'})[md]||md;
 const MD_INFO={
   'MD+1':{tipo:'Recupero',c:'rec',rpe:3,durata:60,focus:'Recupero attivo per tutto il gruppo, con palla e a bassa intensità.'},
-  'MD+2':{tipo:'Recupero attivo',c:'rec',rpe:3,durata:50,focus:'Giorno di riposo o lavoro aerobico leggero e mobilità.'},
-  'MD-6':{tipo:'Ripresa',c:'rec',rpe:4,durata:60,focus:'Ripresa del lavoro con possesso a bassa intensità.'},
-  'MD-5':{tipo:'Ripresa + Tensione',c:'ten',rpe:6,durata:80,focus:'Riattivazione e sotto-principi in spazi ridotti con duelli.'},
-  'MD-4':{tipo:'Tensione',c:'ten',rpe:7,durata:80,focus:'Forza specifica: spazi ridotti, alta densità di duelli e cambi di direzione, sotto-principi del modello.'},
+  'MD+2':{tipo:'Ripresa + Tensione',c:'ten',rpe:6,durata:80,focus:'Riattivazione e sotto-principi in spazi ridotti con duelli.'},
+  'MD+3':{tipo:'Tensione',c:'ten',rpe:7,durata:80,focus:'Forza specifica: spazi ridotti, alta densità di duelli e cambi di direzione, sotto-principi del modello.'},
   'MD-3':{tipo:'Durata',c:'dur',rpe:8,durata:90,focus:'Grandi principi del modello in spazi ampi, numeri vicini all’11 contro 11, blocchi lunghi.'},
   'MD-2':{tipo:'Velocità',c:'vel',rpe:5,durata:65,focus:'Velocità di esecuzione e di decisione, spazi ampi, bassa densità, recuperi completi.'},
   'MD-1':{tipo:'Attivazione',c:'att',rpe:3,durata:55,focus:'Reattività, palle inattive e strategia sull’avversario. Volume basso.'},
   'MD':{tipo:'Partita',c:'match',rpe:9,durata:95,focus:''}
 };
-const mdClass=md=>(MD_INFO[md]||{}).c||'';
+const mdClass=md=>(MD_INFO[normMd(md)]||{}).c||'';
 const TIPI=['Recupero','Recupero attivo','Ripresa','Ripresa + Tensione','Tensione','Durata','Velocità','Attivazione','Seduta libera'];
 const CATS={riscaldamento:'Riscaldamento',recupero:'Recupero',tensione:'Tensione',durata:'Durata',velocita:'Velocità',attivazione:'Attivazione',inattive:'Palle inattive',finalizzazione:'Finalizzazione',transizioni:'Transizioni',condizionale:'Condizionale'};
 
@@ -81,15 +79,13 @@ const BASE_DRILLS=[
 ];
 const TEMPLATES={
  'MD+1':['b03','b04','b20'],
- 'MD+2':['b03','b20'],
- 'MD-6':['b01','b08','b16','b20'],
- 'MD-5':['b01','b05','b16','b07'],
- 'MD-4':['b06','b05','b07'],
+ 'MD+2':['b01','b05','b16','b07'],
+ 'MD+3':['b06','b05','b07'],
  'MD-3':['b01','b10','b11','b15','b09'],
  'MD-2':['b12','b13','b16','b14'],
  'MD-1':['b17','b19','b18']
 };
-const DEFAULT_SLOTS={2:['MD-4','MD-2'],3:['MD-5','MD-3','MD-2'],4:['MD-4','MD-3','MD-2','MD-1'],5:['MD+1','MD-4','MD-3','MD-2','MD-1'],6:['MD+1','MD-5','MD-4','MD-3','MD-2','MD-1']};
+const DEFAULT_SLOTS={2:['MD+3','MD-2'],3:['MD+2','MD-3','MD-2'],4:['MD+3','MD-3','MD-2','MD-1'],5:['MD+1','MD+3','MD-3','MD-2','MD-1'],6:['MD+1','MD+2','MD+3','MD-3','MD-2','MD-1']};
 function daysForSlots(n,matchDay){return (DEFAULT_SLOTS[n]||DEFAULT_SLOTS[3]).map(md=>{const off=md==='MD'?0:Number(md.replace('MD',''));return ((Number(matchDay)+off)%7+7)%7}).sort((a,b)=>a-b)}
 function drillCopy(d){const o={nome:d.nome,fase:d.fase,durata:d.durata,spazio:d.spazio||'',giocatori:d.giocatori||'',descrizione:d.descrizione||'',principio:d.principio||'',coaching:d.coaching||''};if(d.sistema)o.sistema=d.sistema;if(d.organizzazione)o.organizzazione=d.organizzazione;if(d.condizionale)o.condizionale=d.condizionale;if(d.vincoli)o.vincoli=d.vincoli;if(Array.isArray(d.step))o.step=JSON.parse(JSON.stringify(d.step));if(d.schema)o.schema=JSON.parse(JSON.stringify(d.schema));return o}
 function fitDurations(es,target){
