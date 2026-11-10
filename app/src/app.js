@@ -28,7 +28,7 @@ async function boot(){
     db.doc('squadra/classifica').onSnapshot(s=>{S.classifica=s.exists?s.data():null;render()},()=>{});
     db.doc('squadra/info').onSnapshot(s=>{if(s.exists)S.team={...DEFAULT_TEAM,...s.data(),principi:{...DEFAULT_TEAM.principi,...(s.data().principi||{})}};if(!s.metadata.fromCache)done('info');render()},err);
     db.collection('giocatori').onSnapshot(q=>{S.players=q.docs.map(d=>({...d.data(),id:d.id}));if(!q.metadata.fromCache){done('giocatori');autoReturns()}render()},err);
-    db.collection('settimane').onSnapshot(q=>{const w={};q.docs.forEach(d=>{const x={...d.data(),id:d.id};if(Array.isArray(x.sessioni))x.sessioni=x.sessioni.map(o=>o&&o.md?{...o,md:normMd(o.md),titolo:String(o.titolo||'').replace(/MD-[456]\b/g,normMd),esercizi:Array.isArray(o.esercizi)?o.esercizi.map(e=>fixEx(JSON.parse(JSON.stringify(e)))):o.esercizi}:o);w[d.id]=x});S.weeks=w;if(!q.metadata.fromCache)done('settimane');render()},err);
+    db.collection('settimane').onSnapshot(q=>{const w={};q.docs.forEach(d=>{const x={...d.data(),id:d.id};if(Array.isArray(x.sessioni))x.sessioni=x.sessioni.map(o=>o&&o.md?{...o,md:normMd(o.md),titolo:String(o.titolo||'').replace(/MD-[456]\b/g,normMd),esercizi:Array.isArray(o.esercizi)?o.esercizi.map(e=>e&&e.schemaG==null?fixEx(JSON.parse(JSON.stringify(e))):e):o.esercizi}:o);w[d.id]=x});S.weeks=w;if(!q.metadata.fromCache)done('settimane');render()},err);
     db.collection('partite').onSnapshot(q=>{S.matches=q.docs.map(d=>({...d.data(),id:d.id}));if(!q.metadata.fromCache)done('partite');render()},err);
     db.collection('esercizi').onSnapshot(q=>{S.drills=q.docs.map(d=>({...d.data(),id:d.id}));if(!q.metadata.fromCache)done('esercizi');render()},err);
   }catch(e){S.dbState='off';render()}
@@ -412,7 +412,7 @@ function fixCounts(sc,g){if(!sc||!Array.isArray(sc.el))return sc;const ex=expect
     while(c<want){add(k);c++}
     while(c>want){const i=el.map(x=>x.k).lastIndexOf(k);el.splice(i,1);c--}});
   return {...sc,el}}
-function fixEx(e){if(!e)return e;if(e.schema)e.schema=fixCounts(e.schema,e.giocatori);if(Array.isArray(e.step))e.step.forEach(st=>{if(st&&st.schema)st.schema=fixCounts(st.schema,st.giocatori||e.giocatori)});return e}
+function fixEx(e){if(!e)return e;e.schemaG=e.giocatori||'';if(e.schema)e.schema=fixCounts(e.schema,e.giocatori);if(Array.isArray(e.step))e.step.forEach(st=>{if(st&&st.schema)st.schema=fixCounts(st.schema,st.giocatori||e.giocatori)});return e}
 const isTeamGame=e=>e.fase!=='attivazione'&&e.fase!=='condizionale'&&(parseTeams(e).sizes.length>0||/partita|squadre|torneo|rondo|possesso/i.test((e.nome||'')+' '+(e.giocatori||'')));
 /* Disponibilità di ogni giocatore nel giorno della seduta: fuori, rientro (da infortunio, squalifica o assenza), acciaccato, ok */
 const OUT_STATI=['infortunato','squalificato','assente'];
@@ -420,7 +420,7 @@ function rosterOn(dateIso){return sortPlayers(S.players).map(p=>{const st=p.stat
   if(OUT_STATI.includes(st)){if(p.rientro&&p.rientro<=dateIso){k='rientro';why=(st==='infortunato'?'rientro da infortunio':st==='squalificato'?'fine squalifica':'rientro')+' previsto il '+fmtDay(parseIso(p.rientro))}else{k='out';why=STATI[st][0].toLowerCase()+(p.rientro?' fino al '+fmtDay(parseIso(p.rientro)):'')}}
   else if(p.rientratoIl&&(parseIso(dateIso)-parseIso(p.rientratoIl))/864e5>=0&&(parseIso(dateIso)-parseIso(p.rientratoIl))/864e5<=14){k='rientro';why='rientrato il '+fmtDay(parseIso(p.rientratoIl))+(p.rientratoDa?' ('+p.rientratoDa+')':'')}
   if(st==='acciaccato'){k='limitato';why='acciaccato'}
-  return {p,k,why:why+(p.note&&k!=='ok'?' · '+p.note:'')}})}
+  return {p,k,why:why+(p.note&&k!=='ok'?' · '+p.note:'')}}).concat((ED&&ED.s&&ED.s.ospiti||[]).map(g=>({p:g,k:'ospite',why:'ospite per questa seduta'})))}
 /* Il giorno del rientro il giocatore torna disponibile da solo */
 function autoReturns(){const today=todayIso();const back=[];
   S.players.forEach(p=>{const st=p.stato||'disponibile';if(st==='disponibile'||!p.rientro||p.rientro>today)return;
@@ -430,7 +430,11 @@ function autoReturns(){const today=todayIso();const back=[];
 setInterval(()=>{if(S.players&&S.players.length)autoReturns()},30*60*1000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.players&&S.players.length)autoReturns()});
 function markReturn(p,oldSt,newSt){if(OUT_STATI.includes(oldSt||'')&&!OUT_STATI.includes(newSt||'disponibile')){p.rientratoIl=todayIso();p.rientratoDa=STATI[oldSt][0].toLowerCase()}else if(OUT_STATI.includes(newSt)){delete p.rientratoIl;delete p.rientratoDa}}
-function presentIds(s){return Array.isArray(s.presenti)&&s.presenti.length?s.presenti:S.players.filter(p=>!p.stato||p.stato==='disponibile'||p.stato==='acciaccato').map(p=>p.id)}
+/* Ospiti: giocatori aggregati solo per una seduta (es. un Under 17), salvati nella seduta e non nella rosa */
+const allPl=()=>S.players.concat(ED&&ED.s&&Array.isArray(ED.s.ospiti)?ED.s.ospiti:[]);
+const guestIds=s=>(s&&Array.isArray(s.ospiti)?s.ospiti:[]).map(g=>g.id);
+function guestForm(){return `<details class="more"><summary>Aggiungi un ospite per questa seduta</summary><div class="row" style="flex-wrap:wrap;gap:8px;margin-top:8px"><input type="text" id="gNome" placeholder="Es. Rossi (Under 17)" style="flex:1;min-width:160px">${posSelect('gPos','','Ruolo')}<select id="gPiede"><option value="">Piede</option><option>destro</option><option>sinistro</option><option>ambidestro</option></select><button class="btn sm" data-act="guestAdd">Aggiungi</button></div><p class="muted" style="font-size:.82rem">Vale solo per questa seduta: conta nei numeri, nelle squadre e per l’assistente, ma non entra nella rosa.</p></details>`}
+function presentIds(s){return Array.isArray(s.presenti)&&s.presenti.length?s.presenti:S.players.filter(p=>!p.stato||p.stato==='disponibile'||p.stato==='acciaccato').map(p=>p.id).concat(guestIds(s))}
 /* --- duttilità: categorie di ruolo e fabbisogno per sistema --- */
 const CAT_OF={'Difensore centrale':['DC'],'Braccetto (difesa a 3)':['DC','TER'],'Terzino':['TER','QUI'],'Terzino destro':['TER','QUI'],'Terzino sinistro':['TER','QUI'],'Quinto (tutta fascia)':['QUI','TER','EST'],'Mediano':['MED','MEZ'],'Regista':['MED','MEZ'],"Mezz'ala/esterno":['MEZ','QUI','EST'],'Mezzala':['MEZ','TRQ'],'Trequartista':['TRQ','MEZ','EST'],'Ala':['EST','PUN'],'Ala destra':['EST','QUI'],'Ala sinistra':['EST','QUI'],'Seconda punta':['PUN','TRQ'],'Attaccante centrale':['PUN']};
 const CAT_LBL={DC:'centrale',TER:'terzino',QUI:'quinto',MED:'mediano',MEZ:'mezzala',TRQ:'trequartista',EST:'esterno/ala',PUN:'punta'};
@@ -479,7 +483,7 @@ function proposeFormation(sys){const slots=slotsOf(sys);const av=availPlayers();
   idx.forEach(i=>{let best=null,bw=0;av.forEach(p=>{if(used.has(p.id)||p.ruolo==='POR')return;const w=catsOf(p)[slots[i]]||0;if(w>bw){bw=w;best=p}});if(best){res[i]=best.id;used.add(best.id)}});
   return res}
 function isMatchEve(s,w){const md=matchDayOf(w);if(md==null||md==='')return false;const before=(w.sessioni||[]).map(x=>x.giorno).filter(g=>g<Number(md));return before.length&&s.giorno===Math.max(...before)}
-function proposeTitolari(s,w){const F=w.formazione;const pres=presentIds(s);const tit=(F.slots||[]).filter(Boolean).filter(id=>pres.includes(id));const P=id=>S.players.find(x=>x.id===id);
+function proposeTitolari(s,w){const F=w.formazione;const pres=presentIds(s);const tit=(F.slots||[]).filter(Boolean).filter(id=>pres.includes(id));const P=id=>allPl().find(x=>x.id===id);
   const titOut=tit.filter(id=>P(id)&&P(id).ruolo!=='POR'),titGk=tit.filter(id=>P(id)&&P(id).ruolo==='POR');const ris=pres.filter(id=>!tit.includes(id));const risOut=ris.filter(id=>P(id)&&P(id).ruolo!=='POR'),risGk=ris.filter(id=>P(id)&&P(id).ruolo==='POR');
   const split=ids=>{const g=optimize(ids.map(P).filter(Boolean),2,[],false)||[[],[]];return {A:g[0].map(p=>p.id),B:(g[1]||[]).map(p=>p.id)}};
   return {n:2,modo:'titolari',sistemi:[F.sistema,w.sistemaAvversario].filter(x=>x&&needsOf(x)),squadre:[{nome:'Titolari',ids:titOut,sub:split(titOut),portieri:titGk},{nome:'Riserve',ids:risOut,sub:split(risOut),portieri:risGk}],creato:todayIso()}}
@@ -493,14 +497,14 @@ function formDialog(){const w=getWeek(S.weekStart);const sysList=sistemi().map(x
   </div><footer><div></div><div class="row"><button class="btn" data-act="dlgClose">Annulla</button><button class="btn pri" data-act="formSave">Salva formazione</button></div></footer></div>`;
   const d=document.getElementById('dlg');if(!d.open)d.showModal()}
 function proposeSessionTeams(s,w,k){
-  const P=S.players.filter(p=>presentIds(s).includes(p.id));const gks=P.filter(p=>p.ruolo==='POR');const out=P.filter(p=>p.ruolo!=='POR');
+  const P=allPl().filter(p=>presentIds(s).includes(p.id));const gks=P.filter(p=>p.ruolo==='POR');const out=P.filter(p=>p.ruolo!=='POR');
   const systems=sessionSystems(s,w);const groups=optimize(out,k,systems,true)||[];
   const squadre=groups.map((g,i)=>{const sub=optimize(g,2,systems,false)||[g,[]];return {nome:TEAM_NAMES[i],ids:g.map(p=>p.id),sub:{A:sub[0].map(p=>p.id),B:sub[1].map(p=>p.id)}}});
   gks.forEach((p,i)=>{const t=squadre[i%squadre.length];if(t){t.portieri=t.portieri||[];t.portieri.push(p.id)}});
   return {n:k,sistemi:systems,squadre,creato:todayIso()}}
 function exMode(e){if(e.modoSquadre)return e.modoSquadre;if(!isTeamGame(e))return 'no';const pt=parseTeams(e);const g=((e.giocatori||'')+' '+(e.nome||'')).toLowerCase();return pt.sizes.length>=4||/(2|due)\s*(campi|griglie|quadrati)|torneo|parallelo|rondo/.test(g)?'sotto':'squadre'}
-const pName=id=>{const p=S.players.find(x=>x.id===id);return p?shortName(p):'?'};
-function teamStats(t,systems){const pl=S.players.filter(p=>t.ids.includes(p.id));const by=r=>pl.filter(p=>p.ruolo===r).length;
+const pName=id=>{const p=allPl().find(x=>x.id===id);return p?shortName(p):'?'};
+function teamStats(t,systems){const pl=allPl().filter(p=>t.ids.includes(p.id));const by=r=>pl.filter(p=>p.ruolo===r).length;
   const cov=systems.map(sy=>{const need=needsOf(sy);if(!need)return '';const c=coverage(pl,need);const tot=Object.values(need).reduce((a,b)=>a+b,0);const allowed=Math.max(0,tot-pl.length);const lst=[...new Set(c.miss)].map(m=>CAT_LBL[m]).join(', ');if(!c.miss.length)return `${sy} ✓`;if(c.miss.length<=allowed)return `${sy} ✓ (in ${pl.length}: senza ${lst})`;return `${sy}: manca ${lst}`}).filter(Boolean);
   return {txt:`${pl.length} · DIF ${by('DIF')} · CEN ${by('CEN')} · ATT ${by('ATT')} · mancini ${pl.filter(isLeft).length}`,cov}}
 function sessionTeamsHtml(s){const w=getWeek(ED.wid);const T=s.squadreSeduta;const hasGames=(s.esercizi||[]).some(isTeamGame);if(!hasGames&&!T)return '';
@@ -529,12 +533,12 @@ function adaptPanel(s){const a=ED.adapt;const w=getWeek(ED.wid);const d=s.giorno
     <div class="stack" style="gap:4px">${r.esercizi.map(e=>{const l=lbl[e._stato]||lbl.adattato;return `<div class="row" style="justify-content:space-between;border-top:1px solid var(--line);padding-top:4px"><span><b>${esc(e.nome)}</b> <span class="muted mono">${e.durata}′</span><br><span class="muted" style="font-size:.82rem">${esc(e.giocatori||'')}</span></span><span class="pill ${l[1]}">${l[0]}</span></div>`}).join('')}</div>
     <div class="row"><button class="btn pri sm" data-act="adaptApply">Applica alla seduta</button><button class="btn sm" data-act="adaptGen">Rigenera</button></div></div>`}
   const gk=Array.isArray(w.gkCoach)?w.gkCoach.includes(d):gkDefault(d);const date=iso(addDays(parseIso(ED.wid),d));
-  const R=rosterOn(date);if(!a.sel)a.sel=R.filter(x=>x.k!=='out').map(x=>x.p.id);
-  const pill={out:'bad',rientro:'ok',limitato:'warn'};const lab={out:'Fuori',rientro:'Rientro',limitato:'Acciaccato'};
+  const R=rosterOn(date);if(!a.sel)a.sel=R.filter(x=>x.k!=='out').map(x=>x.p.id);guestIds(s).forEach(id=>{if(!a.sel.includes(id)&&!a.unsel?.includes(id))a.sel.push(id)});
+  const pill={out:'bad',rientro:'ok',limitato:'warn',ospite:''};const lab={out:'Fuori',rientro:'Rientro',limitato:'Acciaccato',ospite:'Ospite'};
   const cnt=adaptCounts(a.sel);const pv=previsti(w,d);
   const list=R.length?`<div class="row" style="justify-content:space-between"><span class="lbl">Chi c’è ${DAYS_FULL[d].toLowerCase()} ${fmtDay(parseIso(date))}</span><span class="num" id="adCount"><b>${cnt.m}</b> di movimento + <b>${cnt.p}</b> portieri</span></div>
-    <div class="checks" id="adList">${R.map(x=>`<label title="${esc(x.why)}"><input type="checkbox" data-act-change="adSel" value="${x.p.id}" ${a.sel.includes(x.p.id)?'checked':''}>${esc(x.p.nome)}${x.k!=='ok'?` <span class="pill ${pill[x.k]}">${lab[x.k]}</span>`:''}</label>`).join('')}</div>
-    ${R.some(x=>x.k!=='ok')?`<p class="muted" style="font-size:.82rem">${R.filter(x=>x.k!=='ok').map(x=>`<b>${esc(x.p.nome)}</b>: ${esc(x.why)}`).join(' · ')}</p>`:''}`
+    <div class="checks" id="adList">${R.map(x=>`<label title="${esc(x.why)}"><input type="checkbox" data-act-change="adSel" value="${x.p.id}" ${a.sel.includes(x.p.id)?'checked':''}>${esc(x.p.nome)}${x.k!=='ok'?` <span class="pill ${pill[x.k]}">${lab[x.k]}</span>`:''}${x.k==='ospite'?` <button type="button" class="btn sm ghost" data-act="guestDel" data-id="${x.p.id}" aria-label="Togli ${esc(x.p.nome)}">✕</button>`:''}</label>`).join('')}</div>${guestForm()}
+    ${R.some(x=>x.k!=='ok'&&x.k!=='ospite')?`<p class="muted" style="font-size:.82rem">${R.filter(x=>x.k!=='ok'&&x.k!=='ospite').map(x=>`<b>${esc(x.p.nome)}</b>: ${esc(x.why)}`).join(' · ')}</p>`:''}`
     :`<div class="row"><label class="row" style="gap:6px">Giocatori di movimento <input type="number" id="adM" min="4" max="30" value="${a.m??pv.m}" style="width:64px"></label><label class="row" style="gap:6px">Portieri <input type="number" id="adP" min="0" max="4" value="${a.p??pv.p}" style="width:56px"></label></div>`;
   return `<div class="aibox"><div class="row" style="justify-content:space-between"><h3>Adatta ai presenti</h3><button class="btn sm ghost" data-act="adaptClose">Chiudi</button></div>
     <p class="muted" style="font-size:.85rem">Parto dalla situazione aggiornata della rosa: togli chi non viene, aggiungi chi rientra. Chi rientra o è acciaccato viene inserito con un ruolo protetto (jolly, sponda, niente contrasti duri).</p>
@@ -542,7 +546,7 @@ function adaptPanel(s){const a=ED.adapt;const w=getWeek(ED.wid);const d=s.giorno
     ${(team().prepPortieri||'a volte')!=='mai'?`<label class="row" style="gap:6px"><input type="checkbox" id="adGk" ${gk?'checked':''}> Preparatore portieri presente</label>`:''}
     <label class="f"><span>Indicazioni (facoltative)</span><input type="text" id="adReq" data-keep="1" value="${esc(a.req||'')}" placeholder="Es. campo solo a metà, tieni il possesso cognitivo"></label>
     <div class="row"><button class="btn ai sm" data-act="adaptGen">Adatta la seduta</button></div></div>`}
-function adaptCounts(sel){const P=S.players.filter(p=>sel.includes(p.id));return {m:P.filter(p=>p.ruolo!=='POR').length,p:P.filter(p=>p.ruolo==='POR').length}}
+function adaptCounts(sel){const P=allPl().filter(p=>sel.includes(p.id));return {m:P.filter(p=>p.ruolo!=='POR').length,p:P.filter(p=>p.ruolo==='POR').length}}
 async function adaptGen(){
   const s=ED.s;const w=getWeek(ED.wid);const d=s.giorno;const md=mdLabel(d,matchDayOf(w));
   const listEl=document.getElementById('adList');if(listEl)ED.adapt.sel=[...listEl.querySelectorAll('input:checked')].map(x=>x.value);
@@ -553,6 +557,7 @@ async function adaptGen(){
   const dispo=useList?`DISPONIBILITÀ AGGIORNATA PER QUESTA SEDUTA (prevale su quanto scritto nella rosa sopra):
 - Presenti (${m} di movimento + ${pp} portieri): ${inn.filter(x=>x.k==='ok').map(nm).join('; ')||'nessuno'}.
 - Rientri (da reinserire con gradualità): ${inn.filter(x=>x.k==='rientro').map(x=>nm(x)+' – '+x.why).join('; ')||'nessuno'}.
+- Ospiti aggregati solo per oggi (usali come gli altri, nel loro ruolo): ${inn.filter(x=>x.k==='ospite').map(nm).join('; ')||'nessuno'}.
 - Acciaccati presenti: ${inn.filter(x=>x.k==='limitato').map(x=>nm(x)+' – '+x.why).join('; ')||'nessuno'}.
 - Assenti: ${fuori.map(x=>nm(x)+(x.why?' – '+x.why:' – non viene')).join('; ')||'nessuno'}.
 Regole per rientri e acciaccati: il mister è solo in campo, quindi niente lavoro differenziato a parte; li inserisci negli esercizi del gruppo con un ruolo protetto (jolly o sponda nei possessi, fuori dai duelli e dai contrasti più intensi, a tempo ridotto o come jolly nella partita finale) e lo scrivi nell'organizzazione dell'esercizio con il loro nome. Valuta se le assenze lasciano scoperti dei ruoli (es. centrali, mancini, portieri) e adatta esercizi e sistema di conseguenza.`:'';const gkEl=document.getElementById('adGk');const req=(document.getElementById('adReq')?.value??ED.adapt.req??'').trim();
@@ -635,12 +640,12 @@ function drawEditor(){
       <label class="f"><span>Organizzazione (campo, palloni, passaggio al successivo)</span><input type="text" data-ex="${i}" data-k="organizzazione" value="${esc(e.organizzazione||'')}"></label>
     </div></div>`).join('')||'<div class="empty">Nessun esercizio. Aggiungine uno dalla libreria o chiedilo all’assistente.</div>'}
     ${S.sample?`<div class="aibox"><label class="f"><span>Chiedi un esercizio all'assistente (arriva già disegnato)</span><input type="text" id="exAiReq" placeholder="Es. 20' sulla copertura preventiva, siamo in 14 più un portiere"></label><div class="row"><button class="btn ai sm" data-act="exAi" ${ED.busy?'disabled':''}>${ED.busy?'Sto pensando…':'Proponi esercizio'}</button></div></div>`:''}`;
-  const pls=sortPlayers(S.players);const pres=Array.isArray(s.presenti)?s.presenti:pls.filter(p=>(p.stato||'disponibile')==='disponibile').map(p=>p.id);
+  const pls=sortPlayers(S.players).concat(s.ospiti||[]);const pres=Array.isArray(s.presenti)?s.presenti:pls.filter(p=>(p.stato||'disponibile')==='disponibile').map(p=>p.id);
   const dopo=`<div class="fgrid"><label class="f"><span>RPE medio rilevato</span><input type="number" id="eRpeR" min="0" max="10" step="0.1" value="${s.rpeReale??''}" placeholder="0-10"></label>
       <label class="f"><span>Stato</span><select id="eDone"><option value="0" ${!s.done?'selected':''}>Da svolgere</option><option value="1" ${s.done?'selected':''}>Svolta</option></select></label></div>
     <p class="muted" style="font-size:.85rem">RPE: circa 30 minuti dopo la fine chiedi “da 0 a 10, quanto è stata dura?” e inserisci la media.</p>
     <div class="row" style="justify-content:space-between"><h3>Presenze <span class="muted num" id="presCount" style="font-weight:500;font-size:.9rem">${pres.length} / ${pls.length}</span></h3><div class="row"><button class="btn sm" data-act="presAll" data-v="1">Tutti</button><button class="btn sm" data-act="presAll" data-v="0">Nessuno</button></div></div>
-    ${pls.length?`<div class="checks" id="presList">${pls.map(p=>`<label><input type="checkbox" value="${p.id}" ${pres.includes(p.id)?'checked':''}>${esc(p.nome)}${p.stato&&p.stato!=='disponibile'?` <span class="pill ${STATI[p.stato][1]}">${STATI[p.stato][0]}</span>`:''}</label>`).join('')}</div>`:'<div class="empty">Aggiungi i giocatori nella sezione Squadra per registrare le presenze.</div>'}
+    ${pls.length?`<div class="checks" id="presList">${pls.map(p=>`<label><input type="checkbox" value="${p.id}" ${pres.includes(p.id)?'checked':''}>${esc(p.nome)}${p.ospite?' <span class="pill">Ospite</span>':''}${p.stato&&p.stato!=='disponibile'?` <span class="pill ${STATI[p.stato][1]}">${STATI[p.stato][0]}</span>`:''}</label>`).join('')}</div>${guestForm()}`:'<div class="empty">Aggiungi i giocatori nella sezione Squadra per registrare le presenze.</div>'}
     <h3>Esercizi svolti</h3><p class="muted" style="font-size:.85rem">Quando salvi la seduta come “Svolta”, gli esercizi spuntati in “Salva in libreria” vanno tra i tuoi esercizi con disegno e valutazione.</p>
     <div class="stack" style="gap:6px" id="exReview">${s.esercizi.map((e,i)=>{const sv=e.svolto!==false;const inLib=e.libId&&S.drills.some(d=>d.id===e.libId);return `<div class="row" style="justify-content:space-between;border-top:1px solid var(--line);padding-top:6px"><span style="min-width:0;flex:1"><b>${esc(e.nome)}</b> <span class="muted mono">${esc(e.durata)}′</span>${inLib?' <span class="pill ok">In libreria</span>':''}</span>
       <span class="row" style="gap:8px"><label class="row" style="gap:4px;font-size:.85rem"><input type="checkbox" data-ex2="${i}" data-k="svolto" ${sv?'checked':''}>Svolto</label>
@@ -669,7 +674,7 @@ function saveToLibrary(){if(!ED||!ED.s.done)return 0;const s=ED.s;const w=getWee
     const nd={...f,cat:catFor(e,s.md),usi:1,ultimoUso:data,valutazione:e.valutazione||'',origine:`${DAYS_FULL[s.giorno]} ${fmtDay(parseIso(data))} · ${s.titolo||s.tipo}`};
     S.drills.unshift({...nd,id});put('esercizi',id,nd);e.libId=id;e.contato=true;e.salva=false;n++});
   return n}
-function persistED(){const w=getWeek(ED.wid);const s=ED.s;(s.esercizi||[]).forEach(e=>{if(Array.isArray(e.step)){e.step=e.step.filter(x=>x.titolo||x.descrizione||x.giocatori);if(!e.step.length)delete e.step}});s.md=mdLabel(s.giorno,matchDayOf(w));const ss=[...(w.sessioni||[])];if(ED.idx>=0)ss[ED.idx]=s;else{ss.push(s)}ss.sort((a,b)=>a.giorno-b.giorno);if(ED.idx<0)ED.idx=ss.indexOf(s);saveWeek({...w,sessioni:ss})}
+function persistED(){const w=getWeek(ED.wid);const s=ED.s;(s.esercizi||[]).forEach(e=>{if((e.giocatori||'')!==(e.schemaG??''))fixEx(e);if(Array.isArray(e.step)){e.step=e.step.filter(x=>x.titolo||x.descrizione||x.giocatori);if(!e.step.length)delete e.step}});s.md=mdLabel(s.giorno,matchDayOf(w));const ss=[...(w.sessioni||[])];if(ED.idx>=0)ss[ED.idx]=s;else{ss.push(s)}ss.sort((a,b)=>a.giorno-b.giorno);if(ED.idx<0)ED.idx=ss.indexOf(s);saveWeek({...w,sessioni:ss})}
 function replPanel(i){const r=ED.repl;if(!r||r.i!==i)return '';const e=ED.s.esercizi[i];const allDr=[...S.drills,...BASE_DRILLS];
   if(r.state==='busy')return `<div class="aibox"><p>Cerco un’alternativa a “${esc(e.nome)}”…</p></div>`;
   if(r.state==='done'){const x=r.result;return `<div class="aibox"><div class="row" style="justify-content:space-between"><b>Proposta: ${esc(x.nome)}</b><span class="mono muted">${x.durata}′</span></div><div class="row" style="gap:12px;align-items:flex-start"><div style="width:180px">${thumb(x,'')}</div><div style="flex:1;min-width:0;font-size:.88rem"><div class="kv">${appBadge(x,ED.s.md)}<span>${esc(x.spazio)}</span><span>${esc(x.giocatori)}</span></div><p>${esc(x.descrizione)}</p>${x.principio?`<p><b>Principio:</b> ${esc(x.principio)}</p>`:''}</div></div><div class="row"><button class="btn pri sm" data-act="replUse" data-i="${i}">Usa questo</button><button class="btn sm" data-act="replAi" data-i="${i}">Altra proposta</button><button class="btn sm ghost" data-act="replClose">Annulla</button></div></div>`}
@@ -1068,6 +1073,13 @@ const ACT={
   adaptStop:()=>{ED.adapt?.ac?.abort();ED.adapt={state:'form',m:ED.adapt?.m,p:ED.adapt?.p,req:ED.adapt?.req};drawEditor()},
   adaptGen:()=>adaptGen(),
   adaptApply:()=>{const r=ED.adapt.result;ED.s.esercizi=r.esercizi.map(({_stato,...e})=>e);const had=!!ED.s.squadreSeduta;if(Array.isArray(ED.adapt.sel)&&S.players.length)ED.s.presenti=ED.adapt.sel.slice();ED.s.adattata={data:todayIso(),presenti:ED.adapt.m+' + '+ED.adapt.p+' P',modifiche:r.modifiche};const sq=ED.s.squadreSeduta;ED.adapt=null;if(had&&sq&&ED.s.presenti){const w=getWeek(ED.wid);ED.s.squadreSeduta=sq.modo==='titolari'&&w.formazione?proposeTitolari(ED.s,w):proposeSessionTeams(ED.s,w,sq.n||2)}persistED();drawEditor();toast(had?'Seduta aggiornata e squadre rifatte con i presenti':'Seduta aggiornata')},
+  guestAdd:()=>{const g=id=>document.getElementById(id);const nome=(g('gNome')?.value||'').trim();if(!nome)return toast('Scrivi il nome dell’ospite');const pos1=g('gPos')?.value||'';
+    const o={id:'ospite-'+uid(),nome,pos1,posizione:pos1,ruolo:repOf(pos1)||'CEN',piede:g('gPiede')?.value||'',stato:'disponibile',ospite:true};
+    ED.s.ospiti=[...(ED.s.ospiti||[]),o];if(Array.isArray(ED.s.presenti))ED.s.presenti=[...ED.s.presenti,o.id];if(ED.adapt&&Array.isArray(ED.adapt.sel))ED.adapt.sel.push(o.id);
+    persistED();drawEditor();toast(nome+' aggiunto alla seduta'+(ED.s.esercizi&&ED.s.esercizi.length&&S.sample?': usa “Adatta ai presenti” per rifare numeri e disegni':''))},
+  guestDel:t=>{const id=t.dataset.id;ED.s.ospiti=(ED.s.ospiti||[]).filter(g=>g.id!==id);if(Array.isArray(ED.s.presenti))ED.s.presenti=ED.s.presenti.filter(x=>x!==id);if(ED.adapt&&Array.isArray(ED.adapt.sel))ED.adapt.sel=ED.adapt.sel.filter(x=>x!==id);
+    const T=ED.s.squadreSeduta;if(T&&Array.isArray(T.squadre))T.squadre.forEach(q=>{['ids','portieri'].forEach(k=>{if(Array.isArray(q[k]))q[k]=q[k].filter(x=>x!==id)});if(q.sub)Object.keys(q.sub).forEach(k=>{if(Array.isArray(q.sub[k]))q.sub[k]=q.sub[k].filter(x=>x!==id)})});
+    persistED();drawEditor()},
   presAll:t=>{document.querySelectorAll('#presList input').forEach(i=>i.checked=t.dataset.v==='1');updPres()},
   sessSave:()=>{collectEditor();const n=saveToLibrary();persistED();closeDlg();toast(n?`Seduta salvata, ${n} esercizi in libreria`:'Seduta salvata')},
   sessDel:()=>{const w=getWeek(ED.wid);const ss=[...w.sessioni];ss.splice(ED.idx,1);saveWeek({...w,sessioni:ss});closeDlg();toast('Seduta eliminata')},
@@ -1150,7 +1162,7 @@ document.addEventListener('change',e=>{
     if(k==='matchDay'){v=v===''?null:Number(v);const ss=(w.sessioni||[]).map(s=>({...s,md:mdLabel(s.giorno,v)}));saveWeek({...w,matchDay:v,sessioni:ss});return}
     if(k==='rpePartita')v=v===''?null:Number(v);
     saveWeek({...w,[k]:v})}
-  if((a==='tmTeam'||a==='tmSub')&&ED&&ED.s.squadreSeduta){const T=ED.s.squadreSeduta;const pid=t.dataset.pid;const p=S.players.find(x=>x.id===pid);const row=t.closest('.row');const teamSel=row.querySelector('[data-act-change=tmTeam]');const subSel=row.querySelector('[data-act-change=tmSub]');
+  if((a==='tmTeam'||a==='tmSub')&&ED&&ED.s.squadreSeduta){const T=ED.s.squadreSeduta;const pid=t.dataset.pid;const p=allPl().find(x=>x.id===pid);const row=t.closest('.row');const teamSel=row.querySelector('[data-act-change=tmTeam]');const subSel=row.querySelector('[data-act-change=tmSub]');
     T.squadre.forEach(x=>{x.ids=x.ids.filter(i=>i!==pid);x.sub.A=x.sub.A.filter(i=>i!==pid);x.sub.B=x.sub.B.filter(i=>i!==pid);x.portieri=(x.portieri||[]).filter(i=>i!==pid)});
     const k=Number(teamSel.value);if(k>=0){const tm=T.squadre[k];if(p&&p.ruolo==='POR')tm.portieri.push(pid);else{tm.ids.push(pid);tm.sub[subSel?subSel.value:'A'].push(pid)}}return}
   if(a==='exMode'&&ED){ED.s.esercizi[Number(t.dataset.i)].modoSquadre=t.value;persistED();drawEditor();return}
