@@ -252,6 +252,7 @@ a.btn{color:inherit}
 .okt{color:var(--ok)}.warnt{color:var(--warn)}
 .steps{display:flex;flex-direction:column;gap:6px;border-left:3px solid var(--accent);padding-left:10px}
 .stp{display:flex;gap:10px;align-items:center}
+.callout{background:var(--accent-soft);border-radius:var(--r);padding:10px 12px}
 </style>
 
 <div class="app">
@@ -774,6 +775,9 @@ ${(()=>{const t=S.drills.filter(d=>d.usi).sort((a,b)=>(b.valutazione==='funziona
 }
 function prevWeekSummary(startIso){const id=iso(addDays(parseIso(startIso),-7));const w=S.weeks[id];if(!w)return 'SETTIMANA PRECEDENTE: non registrata.';const t=team();
   return `SETTIMANA PRECEDENTE (${id}): obiettivo "${w.obiettivo||'-'}"; carico pianificato ${dailyLoads(w,t,false).reduce((a,b)=>a+b,0)} UA, rilevato ${dailyLoads(w,t,true).reduce((a,b)=>a+b,0)} UA. Sedute: ${(w.sessioni||[]).map(s=>`${DAYS[s.giorno]} ${s.md} ${s.tipo} ${s.durata}' RPE ${s.rpe}${s.rpeReale!=null?' (reale '+s.rpeReale+')':''}${Array.isArray(s.presenti)?' presenti '+s.presenti.length:''}${s.note?' nota: '+s.note:''}`).join(' | ')}`}
+/* Giorni da progettare: nella settimana in corso solo da oggi in avanti e non già svolti */
+function aiDefaultDays(w,giorni){const cur=iso(mondayOf(new Date()))===w.id;const today=(new Date().getDay()+6)%7;
+  return giorni.filter(d=>!(cur&&d<today)&&!(w.sessioni||[]).some(s=>s.giorno===d&&s.done))}
 function aiPanel(w){
   const a=S.ai;if(!a||a.week!==w.id)return '';
   if(!S.sample)return `<div class="aibox"><p>L'assistente AI non è disponibile in questa vista. Apri la pagina su claude.ai per usarlo; intanto puoi usare il morfociclo di base.</p><div class="row"><button class="btn" data-act="aiClose">Chiudi</button></div></div>`;
@@ -782,17 +786,19 @@ function aiPanel(w){
     <p class="muted" style="font-size:.9rem">Uso modello di gioco, rosa e disponibilità, ultima partita, prossimo avversario, classifica e carico della settimana prima. Sedute: ${giorni.map(d=>DAYS[d]+' '+(mdLabel(d,md)||'')+(ora(d)?' ore '+ora(d):'')).join(', ')||'nessun giorno impostato'}. Ogni esercizio arriva già disegnato.</p>
     ${(t.prepPortieri||'a volte')!=='mai'?`<div class="f"><span class="lbl">Preparatore portieri presente</span><div class="checks" id="aiGk" style="margin-top:6px">${giorni.map(d=>`<label><input type="checkbox" value="${d}" ${(Array.isArray(w.gkCoach)?w.gkCoach.includes(d):gkDefault(d))?'checked':''}>${DAYS_FULL[d]}</label>`).join('')}</div></div>`:''}
     <div class="f"><span class="lbl">Presenti previsti (movimento + portieri)</span><div class="checks" id="aiPrev" style="margin-top:6px">${giorni.map(d=>{const x=previsti(w,d);return `<label>${DAYS[d]} <input type="number" min="0" max="30" data-d="${d}" data-t="m" value="${x.m}" style="width:56px;padding:2px 6px" aria-label="Giocatori di movimento ${DAYS_FULL[d]}"> + <input type="number" min="0" max="4" data-d="${d}" data-t="p" value="${x.p}" style="width:46px;padding:2px 6px" aria-label="Portieri ${DAYS_FULL[d]}"> P</label>`}).join('')}</div></div>
+    ${w.ideaPartita?`<div class="callout"><span class="lbl">Idea della partita (guida tutte le sedute che progetto)</span><p style="font-size:.9rem;margin-top:4px">${esc(w.ideaPartita)}</p></div>`:`<p class="muted" style="font-size:.85rem">Se hai già in mente come giocare la partita, scrivila in «Idea tattica della partita» qui sopra (o ragionala con l’assistente): le sedute la prepareranno.</p>`}
+    <div class="f"><span class="lbl">Sedute da progettare</span><div class="checks" id="aiDays" style="margin-top:6px">${giorni.map(d=>{const old=(w.sessioni||[]).find(s=>s.giorno===d);const sel=(a.days||aiDefaultDays(w,giorni)).includes(d);return `<label><input type="checkbox" value="${d}" ${sel?'checked':''}>${DAYS_FULL[d]} ${mdLabel(d,md)||''}${old?` <span class="muted" style="font-size:.8rem">${old.done?'(svolta)':'(c’è già)'}</span>`:''}</label>`}).join('')}</div><p class="muted" style="font-size:.82rem;margin-top:4px">Le sedute non spuntate restano come sono e l’assistente ne tiene conto per carichi e contenuti.</p></div>
     <div class="fgrid"><label class="f"><span>Stato del gruppo</span><select id="aiStato">${STATI_GRUPPO.map(x=>`<option value="${esc(x)}" ${(w.statoGruppo||'')===x?'selected':''}>${x||'Non indicato'}</option>`).join('')}</select></label>
       <label class="f"><span>Cosa voglio ottenere dal gruppo</span><input type="text" id="aiObG" data-keep="1" value="${esc(w.obiettivoGruppo||'')}" placeholder="Es. ritrovare fiducia, più competitività, concentrazione"></label></div>
     <label class="f"><span>Indicazioni</span><textarea id="aiReq" data-keep="1" placeholder="Es. Sabato abbiamo preso 2 gol su ripartenze centrali. Lunedì siamo di solito in 14, mercoledì campo intero.">${esc(a.req||'')}</textarea></label>
-    <div class="row"><button class="btn ai" data-act="aiGen">Genera la settimana</button></div></div>`;
+    <div class="row"><button class="btn ai" data-act="aiGen">Progetta le sedute</button></div></div>`;
   if(a.state==='busy')return `<div class="aibox"><div class="row" style="justify-content:space-between"><h3>Sto progettando la settimana…</h3><button class="btn sm" data-act="aiStop">Interrompi</button></div><p class="muted" style="font-size:.85rem">Prima il piano della settimana, poi il dettaglio di ogni seduta con i disegni. Di solito 1-3 minuti.</p><ul id="aiSteps" style="margin:0;padding-left:18px;font-size:.9rem">${aiStepsHtml()}</ul></div>`;
   if(a.state==='error')return `<div class="aibox"><p>${esc(a.msg)}</p><div class="row"><button class="btn ai" data-act="aiGen">Riprova</button><button class="btn" data-act="aiClose">Chiudi</button></div></div>`;
   if(a.state==='done'){const r=a.result;return `<div class="aibox"><div class="row" style="justify-content:space-between"><h3>Proposta dell'assistente</h3><button class="btn sm ghost" data-act="aiClose">Scarta</button></div>
     ${r.obiettivo?`<p><b>Obiettivo:</b> ${esc(r.obiettivo)}</p>`:''}${r.razionale?`<p class="muted" style="font-size:.9rem">${esc(r.razionale)}</p>`:''}
     <div class="preview">${r.sessioni.map(s=>`<div class="ps ${mdClass(s.md)}"><div class="row">${mdChip(s.md)}<b>${DAYS_FULL[s.giorno]} · ${esc(s.titolo)}</b><span class="muted num" style="font-size:.85rem">${s.durata}′ · RPE ${s.rpe}</span></div><div style="font-size:.88rem">${esc(s.focus)}</div><div class="muted" style="font-size:.82rem">${s.esercizi.map(e=>esc(e.nome)+' ('+e.durata+'′)').join(' → ')}</div></div>`).join('')}</div>
     ${r.note?`<p style="font-size:.9rem"><b>Note per il mister:</b> ${esc(r.note)}</p>`:''}
-    <div class="row"><button class="btn pri" data-act="aiApply" ${w.sessioni?.length?'data-confirm="Conferma: sostituisce le sedute"':''}>Applica alla settimana</button><button class="btn" data-act="aiGen">Rigenera</button></div></div>`}
+    <div class="row"><button class="btn pri" data-act="aiApply" ${(w.sessioni||[]).some(x=>r.sessioni.some(y=>y.giorno===x.giorno))?`data-confirm="Conferma: sostituisce ${r.sessioni.map(x=>DAYS_FULL[x.giorno].toLowerCase()).join(' e ')}"`:''}>${a.kept?'Applica a '+r.sessioni.map(x=>DAYS_FULL[x.giorno].toLowerCase()).join(' e '):'Applica alla settimana'}</button><button class="btn" data-act="aiGen">Rigenera</button></div></div>`}
   return '';
 }
 const STEP_LBL={wait:'in attesa',run:'in corso…',retry:'nuovo tentativo…',ok:'fatto',fail:'non riuscito: uso il piano con disegni automatici'};
@@ -807,10 +813,16 @@ async function aiGenerate(){
   const pv=document.getElementById('aiPrev');if(pv){const o={};pv.querySelectorAll('input').forEach(i=>{const d=i.dataset.d;o[d]=o[d]||{};o[d][i.dataset.t]=Number(i.value)||0});w.previsti=o}
   const st=document.getElementById('aiStato');if(st){w.statoGruppo=st.value;w.obiettivoGruppo=(document.getElementById('aiObG')?.value||'').trim()}
   if(gkBox||pv||st)saveWeek({...w});
-  const giorni=(t.giorni&&t.giorni.length?t.giorni:daysForSlots(t.sedute||3,md??6)).filter(d=>md==null||md===''||d!==Number(md));
+  const tutti=(t.giorni&&t.giorni.length?t.giorni:daysForSlots(t.sedute||3,md??6)).filter(d=>md==null||md===''||d!==Number(md));
+  const dBox=document.getElementById('aiDays');const giorni=dBox?[...dBox.querySelectorAll('input:checked')].map(i=>Number(i.value)):(S.ai?.days||tutti);
+  if(!giorni.length){toast('Scegli almeno una seduta da progettare');return}
+  const kept=(w.sessioni||[]).filter(s=>!giorni.includes(s.giorno));
+  const keptTxt=kept.length?`SEDUTE CHE RESTANO COME SONO (già svolte o già decise: non riprogettarle, ma tienine conto per carico, varietà e progressione): ${kept.map(s=>`${DAYS_FULL[s.giorno]} ${normMd(s.md)||''}${s.done?' (svolta'+(s.rpeReale?', RPE '+s.rpeReale:'')+')':''}: ${s.titolo} – ${(s.esercizi||[]).map(e=>e.nome).join(', ')}`).join(' | ')}`:'';
+  const ideaTxt=w.ideaPartita?`IDEA DELLA PARTITA DI ${md!=null&&md!==''?DAYS_FULL[md].toUpperCase():'QUESTA SETTIMANA'} (spiegata dal mister, è il filo conduttore): ${w.ideaPartita}
+Ogni seduta da progettare deve preparare questa idea, con i mezzi del suo giorno: in MD-3 i principi dell'idea in spazi ampi e numeri vicini all'11c11; in MD-2 le stesse situazioni a velocità alta, volume basso e recuperi completi; nell'ultima seduta prima della gara titolari contro riserve sull'idea. Scrivi nel "principio" di ogni esercizio quale parte dell'idea allena e chiudi con una partita a tema sull'idea.`:'';
   const steps=[{label:'Piano della settimana',state:'run'},...giorni.map(d=>({label:'Dettaglio di '+DAYS_FULL[d].toLowerCase(),state:'wait'}))];
   const ac=new AbortController();
-  S.ai={week:w.id,state:'busy',req,steps,ac};render();
+  S.ai={week:w.id,state:'busy',req,steps,ac,days:giorni};render();
   const ctx=`${METODO}
 
 ${teamContext()}
@@ -819,6 +831,8 @@ ${prevWeekSummary(w.id)}
 CALENDARIO: partita ${md==null||md===''?'assente (settimana di sosta)':DAYS_FULL[md]+(w.avversario?' contro '+w.avversario:'')}.
 Giorni di allenamento (0=lunedì … 6=domenica, etichetta MD già calcolata): ${giorni.map(d=>d+'='+DAYS_FULL[d]+' '+(mdLabel(d,md)||'')+(ora(d)?' ore '+ora(d):'')).join(', ')}.
 Obiettivo indicato dal mister: ${w.obiettivo||'non indicato, proponilo tu'}.
+${ideaTxt}
+${keptTxt}
 Indicazioni del mister: ${req||'nessuna'}.
 ${attRule()}
 ${sisRule(w)}
@@ -829,7 +843,7 @@ ${groupRule(w)}
 ${condRule()}
 ${appRule()}
 ${designRule()}`;
-  const planPrompt=`Sei il collaboratore tecnico di un allenatore di calcio italiano. Progetta il PIANO del microciclo della settimana che inizia ${w.id} (il dettaglio degli esercizi verrà sviluppato dopo).
+  const planPrompt=`Sei il collaboratore tecnico di un allenatore di calcio italiano. Progetta il PIANO ${kept.length?'delle sedute indicate':'del microciclo'} della settimana che inizia ${w.id} (il dettaglio degli esercizi verrà sviluppato dopo).
 ${ctx}
 
 Rispondi SOLO con un oggetto JSON in italiano, conciso:
@@ -837,7 +851,7 @@ Rispondi SOLO con un oggetto JSON in italiano, conciso:
 Una sessione per ciascun giorno indicato: attivazione + 2-3 esercizi (più un eventuale breve blocco condizionale) + la partita finale, durate che sommano a ${t.durata}'. Verifica i numeri di ogni esercizio.`;
   let plan;
   try{plan=await S.sample.json(planPrompt,{modelTier:'complex',signal:ac.signal});if(!Array.isArray(plan?.sessioni)||!plan.sessioni.length)throw {code:'empty',message:'Il piano non contiene sedute.'};steps[0].state='ok';aiStepsUpd()}
-  catch(e){if(e&&(e.name==='AbortError'||e.code==='aborted')){S.ai={week:w.id,state:'form',req};render();return}S.ai={week:w.id,state:'error',req,msg:aiErrMsg(e)};render();return}
+  catch(e){if(e&&(e.name==='AbortError'||e.code==='aborted')){S.ai={week:w.id,state:'form',req,days:giorni};render();return}S.ai={week:w.id,state:'error',req,days:giorni,msg:aiErrMsg(e)};render();return}
   const pianoTxt=JSON.stringify({obiettivo:plan.obiettivo,sessioni:plan.sessioni.map(s=>({giorno:s.giorno,titolo:s.titolo,focus:s.focus,esercizi:(s.esercizi||[]).map(e=>e.nome+' ('+e.durata+"')")}))});
   const detail=async(s,idx)=>{const stp=steps[idx+1]||{};
     const p=`Sei il collaboratore tecnico di un allenatore di calcio italiano. Sviluppa in dettaglio la seduta di ${DAYS_FULL[s.giorno]||''} del microciclo, mantenendo esercizi, ordine, durate e numeri del piano (correggi solo eventuali errori nei numeri).
@@ -862,10 +876,10 @@ L'attivazione non ha schema; tutti gli altri esercizi sì.`;
     const res={...plan,sessioni:plan.sessioni.map((s,i)=>{if(det[i])return {...s,esercizi:det[i]};failed.push(DAYS_FULL[s.giorno]);return {...s,esercizi:(s.esercizi||[]).map(e=>({...e,descrizione:e.idea||''}))}})};
     if(failed.length)res.note=(res.note?res.note+' ':'')+`Il dettaglio di ${failed.join(', ')} non è riuscito: ci sono gli esercizi del piano con disegni automatici, completali da Modifica o rigenera.`;
     const r=normalizeWeekAI(res,md);if(!r.sessioni.length)throw {code:'empty',message:'La proposta non contiene sedute valide.'};
-    S.ai={week:w.id,state:'done',req,result:r};
+    r.sessioni=r.sessioni.filter(x=>giorni.includes(x.giorno));S.ai={week:w.id,state:'done',req,result:r,days:giorni,kept:kept.length};
   }catch(e){
-    if(e&&(e.name==='AbortError'||e.code==='aborted'))S.ai={week:w.id,state:'form',req};
-    else S.ai={week:w.id,state:'error',req,msg:aiErrMsg(e)};
+    if(e&&(e.name==='AbortError'||e.code==='aborted'))S.ai={week:w.id,state:'form',req,days:giorni};
+    else S.ai={week:w.id,state:'error',req,days:giorni,msg:aiErrMsg(e)};
   }
   render();
 }
@@ -1543,8 +1557,8 @@ const ACT={
   aiOpen:()=>{S.ai={week:S.weekStart,state:'form'};render();setTimeout(()=>document.getElementById('aiReq')?.focus(),0)},
   aiClose:()=>{S.ai=null;render()},
   aiGen:()=>aiGenerate(),
-  aiStop:()=>{S.ai?.ac?.abort();S.ai={week:S.weekStart,state:'form',req:S.ai?.req};render()},
-  aiApply:()=>{const w=getWeek(S.weekStart);const r=S.ai.result;saveWeek({...w,sessioni:r.sessioni,obiettivo:w.obiettivo||r.obiettivo,note:r.note,generatedBy:'ai'});S.ai=null;toast('Settimana aggiornata');render()},
+  aiStop:()=>{S.ai?.ac?.abort();S.ai={week:S.weekStart,state:'form',req:S.ai?.req,days:S.ai?.days};render()},
+  aiApply:()=>{const w=getWeek(S.weekStart);const r=S.ai.result;const g=r.sessioni.map(x=>x.giorno);const merged=[...(w.sessioni||[]).filter(x=>!g.includes(x.giorno)),...r.sessioni].sort((a,b)=>a.giorno-b.giorno);saveWeek({...w,sessioni:merged,obiettivo:w.obiettivo||r.obiettivo,note:r.note,generatedBy:'ai'});S.ai=null;toast('Settimana aggiornata');render()},
   tplWeek:()=>{const w=getWeek(S.weekStart);saveWeek({...w,sessioni:templateWeek(w.id,team(),matchDayOf(w)),generatedBy:'template'});toast('Morfociclo applicato')},
   openSess:t=>{S.weekStart=t.dataset.w;openSess(t.dataset.w,Number(t.dataset.i),t.dataset.tab);render()},
   newSess:t=>newSess(Number(t.dataset.d)),

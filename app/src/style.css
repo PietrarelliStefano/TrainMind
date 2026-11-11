@@ -245,3 +245,4 @@ a.btn{color:inherit}
 .okt{color:var(--ok)}.warnt{color:var(--warn)}
 .steps{display:flex;flex-direction:column;gap:6px;border-left:3px solid var(--accent);padding-left:10px}
 .stp{display:flex;gap:10px;align-items:center}
+.callout{background:var(--accent-soft);border-radius:var(--r);padding:10px 12px}
