@@ -960,19 +960,19 @@ const isTeamGame=e=>e.fase!=='attivazione'&&e.fase!=='condizionale'&&(parseTeams
 /* Disponibilità di ogni giocatore nel giorno della seduta: fuori, rientro (da infortunio, squalifica o assenza), acciaccato, ok */
 const OUT_STATI=['infortunato','squalificato','assente'];
 function rosterOn(dateIso){return sortPlayers(S.players).map(p=>{const st=p.stato||'disponibile';let k='ok',why='';
-  if(OUT_STATI.includes(st)){if(p.rientro&&p.rientro<=dateIso){k='rientro';why=(st==='infortunato'?'rientro da infortunio':st==='squalificato'?'fine squalifica':'rientro')+' previsto il '+fmtDay(parseIso(p.rientro))}else{k='out';why=STATI[st][0].toLowerCase()+(p.rientro?' fino al '+fmtDay(parseIso(p.rientro)):'')}}
-  else if(p.rientratoIl&&(parseIso(dateIso)-parseIso(p.rientratoIl))/864e5>=0&&(parseIso(dateIso)-parseIso(p.rientratoIl))/864e5<=14){k='rientro';why='rientrato il '+fmtDay(parseIso(p.rientratoIl))+(p.rientratoDa?' ('+p.rientratoDa+')':'')}
+  if(OUT_STATI.includes(st)){if(p.rientro&&p.rientro<=dateIso){if(st==='infortunato'){k='rientro';why='rientro da infortunio previsto il '+fmtDay(parseIso(p.rientro))}}else{k='out';why=STATI[st][0].toLowerCase()+(p.rientro?' fino al '+fmtDay(parseIso(p.rientro)):'')}}
+  else if(p.rientratoIl&&!['assente','squalificato'].includes(p.rientratoDa)&&(parseIso(dateIso)-parseIso(p.rientratoIl))/864e5>=0&&(parseIso(dateIso)-parseIso(p.rientratoIl))/864e5<=14){k='rientro';why='rientrato il '+fmtDay(parseIso(p.rientratoIl))+(p.rientratoDa?' ('+p.rientratoDa+')':'')}
   if(st==='acciaccato'){k='limitato';why='acciaccato'}
   return {p,k,why:why+(p.note&&k!=='ok'?' · '+p.note:'')}}).concat((ED&&ED.s&&ED.s.ospiti||[]).map(g=>({p:g,k:'ospite',why:'ospite per questa seduta'})))}
 /* Il giorno del rientro il giocatore torna disponibile da solo */
 function autoReturns(){const today=todayIso();const back=[];
   S.players.forEach(p=>{const st=p.stato||'disponibile';if(st==='disponibile'||!p.rientro||p.rientro>today)return;
-    if(OUT_STATI.includes(st)){p.rientratoIl=p.rientro;p.rientratoDa=STATI[st][0].toLowerCase()}
+    if(st==='infortunato'){p.rientratoIl=p.rientro;p.rientratoDa='infortunato'}
     p.stato='disponibile';p.rientro='';back.push(p);const {id,...rest}=p;put('giocatori',id,rest)});
   if(back.length){render();toast((back.length===1?'Torna disponibile: ':'Tornano disponibili: ')+back.map(p=>cogNome(p)).join(', '))}}
 setInterval(()=>{if(S.players&&S.players.length)autoReturns()},30*60*1000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.players&&S.players.length)autoReturns()});
-function markReturn(p,oldSt,newSt){if(OUT_STATI.includes(oldSt||'')&&!OUT_STATI.includes(newSt||'disponibile')){p.rientratoIl=todayIso();p.rientratoDa=STATI[oldSt][0].toLowerCase()}else if(OUT_STATI.includes(newSt)){delete p.rientratoIl;delete p.rientratoDa}}
+function markReturn(p,oldSt,newSt){if(oldSt==='infortunato'&&!OUT_STATI.includes(newSt||'disponibile')){p.rientratoIl=todayIso();p.rientratoDa=STATI[oldSt][0].toLowerCase()}else if(OUT_STATI.includes(newSt)){delete p.rientratoIl;delete p.rientratoDa}}
 /* Ospiti: giocatori aggregati solo per una seduta (es. un Under 17), salvati nella seduta e non nella rosa */
 const allPl=()=>S.players.concat(ED&&ED.s&&Array.isArray(ED.s.ospiti)?ED.s.ospiti:[]);
 const guestIds=s=>(s&&Array.isArray(s.ospiti)?s.ospiti:[]).map(g=>g.id);
@@ -1087,11 +1087,13 @@ function adaptPanel(s){const a=ED.adapt;const w=getWeek(ED.wid);const d=s.giorno
     <p class="muted" style="font-size:.85rem">Parto dalla situazione aggiornata della rosa: togli chi non viene, aggiungi chi rientra. Chi rientra o è acciaccato viene inserito con un ruolo protetto (jolly, sponda, niente contrasti duri).</p>
     ${list}
     ${(team().prepPortieri||'a volte')!=='mai'?`<label class="row" style="gap:6px"><input type="checkbox" id="adGk" ${gk?'checked':''}> Preparatore portieri presente</label>`:''}
-    <label class="f"><span>Indicazioni (facoltative)</span><input type="text" id="adReq" data-keep="1" value="${esc(a.req||'')}" placeholder="Es. campo solo a metà, tieni il possesso cognitivo"></label>
+    <div class="f"><span class="lbl">Cosa posso cambiare</span><div class="checks" style="margin-top:6px"><label><input type="radio" name="adMode" value="adatta" ${(a.mode||'adatta')==='adatta'?'checked':''}> Adatta la seduta pianificata (stesso obiettivo, durata, attivazione e partita finale)</label><label><input type="radio" name="adMode" value="libera" ${a.mode==='libera'?'checked':''}> Seduta diversa: seguo le tue indicazioni, senza i vincoli della seduta</label></div></div>
+    <label class="f"><span>Indicazioni (facoltative)</span><input type="text" id="adReq" data-keep="1" value="${esc(a.req||'')}" placeholder="Es. oggi solo 60', niente partita finale, lavoro tecnico a coppie e un torneo 4c4"></label>
     <div class="row"><button class="btn ai sm" data-act="adaptGen">Adatta la seduta</button></div></div>`}
 function adaptCounts(sel){const P=allPl().filter(p=>sel.includes(p.id));return {m:P.filter(p=>p.ruolo!=='POR').length,p:P.filter(p=>p.ruolo==='POR').length}}
 async function adaptGen(){
   const s=ED.s;const w=getWeek(ED.wid);const d=s.giorno;const md=mdLabel(d,matchDayOf(w));
+  const modeEl=document.querySelector('input[name=adMode]:checked');const mode=modeEl?modeEl.value:(ED.adapt.mode||'adatta');const libera=mode==='libera';
   const listEl=document.getElementById('adList');if(listEl)ED.adapt.sel=[...listEl.querySelectorAll('input:checked')].map(x=>x.value);
   const sel=ED.adapt.sel;const useList=S.players.length&&Array.isArray(sel);const cc=useList?adaptCounts(sel):null;
   const m=useList?cc.m:Number(document.getElementById('adM')?.value??ED.adapt.m),pp=useList?cc.p:Number(document.getElementById('adP')?.value??ED.adapt.p);
@@ -1106,20 +1108,20 @@ async function adaptGen(){
 Regole per rientri e acciaccati: il mister è solo in campo, quindi niente lavoro differenziato a parte; li inserisci negli esercizi del gruppo con un ruolo protetto (jolly o sponda nei possessi, fuori dai duelli e dai contrasti più intensi, a tempo ridotto o come jolly nella partita finale) e lo scrivi nell'organizzazione dell'esercizio con il loro nome. Valuta se le assenze lasciano scoperti dei ruoli (es. centrali, mancini, portieri) e adatta esercizi e sistema di conseguenza.`:'';const gkEl=document.getElementById('adGk');const req=(document.getElementById('adReq')?.value??ED.adapt.req??'').trim();
   const prev={...(w.previsti||{})};prev[d]={m,p:pp};let gkc=Array.isArray(w.gkCoach)?w.gkCoach.slice():(team().giorni||[]).filter(gkDefault);if(gkEl){gkc=gkc.filter(x=>x!==d);if(gkEl.checked)gkc.push(d)}
   const w2={...w,previsti:prev,gkCoach:gkc};saveWeek(w2);
-  const ac=new AbortController();ED.adapt={state:'busy',m,p:pp,req,ac,sel};drawEditor();
+  const ac=new AbortController();ED.adapt={state:'busy',m,p:pp,req,ac,sel,mode};drawEditor();
   const strip=e=>{const {schema,svolto,salva,valutazione,libId,contato,...r}=e;return r};
   const others=(w.sessioni||[]).filter(x=>x!==w.sessioni[ED.idx]).map(x=>`${DAYS[x.giorno]} ${x.md}: ${x.titolo} (${(x.esercizi||[]).map(e=>e.nome).join(', ')})`).join(' | ');
-  const prompt=`Sei il collaboratore tecnico di un allenatore di calcio italiano. La seduta di ${DAYS_FULL[d]} (${md}) era già pianificata, ma i presenti cambiano: ${m} giocatori di movimento + ${pp} portieri. Rivedi SOLO questa seduta.
+  const prompt=`Sei il collaboratore tecnico di un allenatore di calcio italiano. La seduta di ${DAYS_FULL[d]} (${md}) era già pianificata, ma ${libera?'il mister vuole fare una seduta diversa':'i presenti cambiano'}: ${m} giocatori di movimento + ${pp} portieri. Rivedi SOLO questa seduta.
 ${METODO}
 
 ${teamContext()}
 ALTRE SEDUTE DELLA SETTIMANA (non cambiano): ${others||'nessuna'}
 Obiettivo della settimana: ${w.obiettivo||'-'}.
-${attRule()}
+${libera?'':attRule()}
 ${sisRule(w2)}
 ${staffRule(w2)}
 ${numRule(w2,[d])}
-${dayRule([d])}
+${libera?'':dayRule([d])}
 ${groupRule(w2)}
 ${condRule()}
 ${appRule()}
@@ -1128,16 +1130,16 @@ ${designRule()}
 SEDUTA ATTUALE (indice, esercizio): ${JSON.stringify({titolo:s.titolo,focus:s.focus,durata:s.durata,rpe:s.rpe,esercizi:s.esercizi.map((e,i)=>({indice:i,...strip(e)}))})}
 ${dispo}${reqRule(req)}
 
-Regole della revisione: mantieni obiettivo, logica MD, durata totale (${s.durata}'), attivazione iniziale e partita finale. Per ogni esercizio decidi: se funziona così com'è con i nuovi numeri, "invariato"; se basta cambiare numeri, spazio, jolly o rotazioni, "adattato"; se non funziona più, sostituiscilo con un esercizio diverso ("nuovo") che alleni lo stesso principio. Usa "invariato" SOLO se anche il testo dei numeri ("giocatori", descrizione, organizzazione) resta corretto con i nuovi presenti: se cambia anche solo un conteggio, è "adattato" con tutti i numeri aggiornati.
+${libera?`Il mister vuole una SEDUTA DIVERSA da quella pianificata, per motivi suoi: NON sei vincolato a obiettivo, tipo di seduta, esercizi, durata totale, attivazione o partita finale della seduta attuale. Progetta la seduta seguendo prima di tutto le sue indicazioni; usa la seduta attuale e il giorno ${md} solo come riferimento per il carico quando le indicazioni non dicono altro. Puoi tenere un esercizio esistente ("invariato" o "adattato"), gli altri sono "nuovo". Aggiungi a inizio JSON "titolo", "focus" e "rpe" della nuova seduta.`:`Regole della revisione: mantieni obiettivo, logica MD, durata totale (${s.durata}'), attivazione iniziale e partita finale, salvo diversa indicazione del mister. Per ogni esercizio decidi:`} se funziona così com'è con i nuovi numeri, "invariato"; se basta cambiare numeri, spazio, jolly o rotazioni, "adattato"; se non funziona più, sostituiscilo con un esercizio diverso ("nuovo") che alleni lo stesso principio. Usa "invariato" SOLO se anche il testo dei numeri ("giocatori", descrizione, organizzazione) resta corretto con i nuovi presenti: se cambia anche solo un conteggio, è "adattato" con tutti i numeri aggiornati.
 ${SCHEMA_SPEC}
 
 Rispondi SOLO con JSON: {"modifiche":"2-4 frasi su cosa cambia e perché","esercizi":[{"stato":"invariato","indice":0} oppure {"stato":"adattato|nuovo","nome":"","fase":"attivazione|iniziale|centrale|condizionale|finale","durata":15,"spazio":"","giocatori":"numeri esatti con totale","descrizione":"","principio":"","coaching":"","organizzazione":"","condizionale":"","sistema":"","step":[{"titolo":"","giocatori":"","descrizione":""}],"schema":{...}}]}`;
   try{const r=await S.sample.json(prompt,{modelTier:'default',signal:ac.signal});
     const list=Array.isArray(r?.esercizi)?r.esercizi:[];if(!list.length)throw {code:'empty',message:'La proposta non contiene esercizi.'};
     let es=list.map(x=>{if(x&&x.stato==='invariato'&&s.esercizi[x.indice]){return {...JSON.parse(JSON.stringify(s.esercizi[x.indice])),_stato:'invariato'}}const e=normalizeEx(x);if(x&&s.esercizi[x.indice]&&x.stato==='adattato'&&!e.schema&&s.esercizi[x.indice].schema)e.schema=s.esercizi[x.indice].schema;e._stato=x&&x.stato==='nuovo'?'nuovo':'adattato';return e});
-    es=ensureFinalGame(ensureAtt(es,md),team().partitaFinale??15,s.durata);es.forEach(e=>{if(!e._stato)e._stato='nuovo'});
-    if(ED&&ED.adapt)ED.adapt={state:'done',m,p:pp,req,sel,result:{modifiche:String(r.modifiche||''),esercizi:es}};
-  }catch(e){if(!ED)return;if(e&&(e.name==='AbortError'||e.code==='aborted'))ED.adapt={state:'form',m,p:pp,req,sel};else ED.adapt={state:'error',m,p:pp,req,sel,msg:aiErrMsg(e)}}
+    if(!libera)es=ensureFinalGame(ensureAtt(es,md),team().partitaFinale??15,s.durata);es.forEach(e=>{if(!e._stato)e._stato='nuovo'});
+    if(ED&&ED.adapt)ED.adapt={state:'done',m,p:pp,req,sel,mode,result:{modifiche:String(r.modifiche||''),esercizi:es,titolo:libera?String(r.titolo||''):'',focus:libera?String(r.focus||''):'',rpe:libera&&Number(r.rpe)?Math.min(10,Math.max(1,Number(r.rpe))):null}};
+  }catch(e){if(!ED)return;if(e&&(e.name==='AbortError'||e.code==='aborted'))ED.adapt={state:'form',m,p:pp,req,sel,mode};else ED.adapt={state:'error',m,p:pp,req,sel,mode,msg:aiErrMsg(e)}}
   if(ED&&document.getElementById('dlg').open)drawEditor();
 }
 function stepsView(e,i){if(!Array.isArray(e.step)||!e.step.length)return '';return `<div class="steps">${e.step.map((st,k)=>`<div class="stp">${st.schema?`<div style="width:120px;flex:none">${thumb({...st,nome:e.nome+' step '+(k+1)},`data-act="stView" data-i="${i}" data-k="${k}"`)}</div>`:''}<div style="min-width:0"><b>Step ${k+1}${st.titolo?' · '+esc(st.titolo):''}</b>${st.giocatori?` <span class="muted mono" style="font-size:.8rem">${esc(st.giocatori)}</span>`:''}<div style="font-size:.88rem">${esc(st.descrizione)}</div></div></div>`).join('')}</div>`}
@@ -1422,6 +1424,7 @@ function plDialog(id){
     <div class="fgrid"><label class="f"><span>Nome e cognome</span><input type="text" id="pNome" value="${esc(p.nome)}"></label><label class="f"><span>Anno di nascita</span><input type="number" id="pNasc" value="${esc(p.nascita)}"></label></div>
     <div class="fgrid"><label class="f"><span>Reparto</span><select id="pRuolo">${Object.entries(RUOLI_OPT).map(([k,l])=>`<option value="${k}" ${p.ruolo===k?'selected':''}>${l}</option>`).join('')}</select></label><label class="f"><span>Ruolo principale</span>${posSelect('pPos1',p.pos1||'','—')}</label><label class="f"><span>Ruolo secondario</span>${posSelect('pPos2',p.pos2||'','Nessuno')}</label><label class="f"><span>Piede</span><select id="pPiede">${['','destro','sinistro','ambidestro'].map(x=>`<option ${p.piede===x?'selected':''}>${x}</option>`).join('')}</select></label></div>
     <label class="f"><span>Sotto-ruolo e caratteristiche</span><input type="text" id="pSub" value="${esc(p.sottoruolo||'')}" placeholder="Es. braccetto sinistro in impostazione, mezzala d’inserimento, punta di riferimento"></label>
+    ${p.rientratoIl?`<div class="row" style="justify-content:space-between;background:var(--accent-soft);border-radius:var(--r);padding:8px 10px"><span style="font-size:.9rem">Segnato come rientro da infortunio dal ${fmtDay(parseIso(p.rientratoIl))}: nelle sedute lo inserisco con un ruolo protetto.</span><button class="btn sm" data-act="plNoReturn" data-id="${p.id}">Non è un rientro</button></div>`:''}
     <div class="fgrid"><label class="f"><span>Stato</span><select id="pStato">${Object.entries(STATI).map(([k,[l]])=>`<option value="${k}" ${(p.stato||'disponibile')===k?'selected':''}>${l}</option>`).join('')}</select></label><label class="f"><span>Rientro previsto</span><input type="date" id="pRientro" value="${esc(p.rientro)}"></label></div>
     <label class="f"><span>Note</span><textarea id="pNote">${esc(p.note)}</textarea></label>
   </div><footer><div>${id?`<button class="btn danger" data-act="plDel" data-id="${id}" data-confirm="Conferma eliminazione">Elimina</button>`:''}</div><div class="row"><button class="btn" data-act="dlgClose">Annulla</button><button class="btn pri" data-act="plSave" data-id="${id||''}">Salva</button></div></footer></div>`;
@@ -1616,7 +1619,7 @@ const ACT={
   adaptClose:()=>{ED.adapt=null;drawEditor()},
   adaptStop:()=>{ED.adapt?.ac?.abort();ED.adapt={state:'form',m:ED.adapt?.m,p:ED.adapt?.p,req:ED.adapt?.req};drawEditor()},
   adaptGen:()=>adaptGen(),
-  adaptApply:()=>{const r=ED.adapt.result;ED.s.esercizi=r.esercizi.map(({_stato,...e})=>e);const had=!!ED.s.squadreSeduta;if(Array.isArray(ED.adapt.sel)&&S.players.length)ED.s.presenti=ED.adapt.sel.slice();ED.s.adattata={data:todayIso(),presenti:ED.adapt.m+' + '+ED.adapt.p+' P',modifiche:r.modifiche};const sq=ED.s.squadreSeduta;ED.adapt=null;if(had&&sq&&ED.s.presenti){const w=getWeek(ED.wid);ED.s.squadreSeduta=sq.modo==='titolari'&&w.formazione?proposeTitolari(ED.s,w):proposeSessionTeams(ED.s,w,sq.n||2)}persistED();drawEditor();toast(had?'Seduta aggiornata e squadre rifatte con i presenti':'Seduta aggiornata')},
+  adaptApply:()=>{const r=ED.adapt.result;ED.s.esercizi=r.esercizi.map(({_stato,...e})=>e);if(ED.adapt.mode==='libera'){if(r.titolo)ED.s.titolo=r.titolo;if(r.focus)ED.s.focus=r.focus;if(r.rpe)ED.s.rpe=r.rpe;ED.s.durata=ED.s.esercizi.reduce((a,e)=>a+(Number(e.durata)||0),0)||ED.s.durata}const had=!!ED.s.squadreSeduta;if(Array.isArray(ED.adapt.sel)&&S.players.length)ED.s.presenti=ED.adapt.sel.slice();ED.s.adattata={data:todayIso(),presenti:ED.adapt.m+' + '+ED.adapt.p+' P',modifiche:r.modifiche};const sq=ED.s.squadreSeduta;ED.adapt=null;if(had&&sq&&ED.s.presenti){const w=getWeek(ED.wid);ED.s.squadreSeduta=sq.modo==='titolari'&&w.formazione?proposeTitolari(ED.s,w):proposeSessionTeams(ED.s,w,sq.n||2)}persistED();drawEditor();toast(had?'Seduta aggiornata e squadre rifatte con i presenti':'Seduta aggiornata')},
   guestAdd:()=>{const g=id=>document.getElementById(id);const nome=(g('gNome')?.value||'').trim();if(!nome)return toast('Scrivi il nome dell’ospite');const pos1=g('gPos')?.value||'';
     const o={id:'ospite-'+uid(),nome,pos1,posizione:pos1,ruolo:repOf(pos1)||'CEN',piede:g('gPiede')?.value||'',stato:'disponibile',ospite:true};
     ED.s.ospiti=[...(ED.s.ospiti||[]),o];if(Array.isArray(ED.s.presenti))ED.s.presenti=[...ED.s.presenti,o.id];if(ED.adapt&&Array.isArray(ED.adapt.sel))ED.adapt.sel.push(o.id);
@@ -1631,6 +1634,7 @@ const ACT={
   plEdit:t=>plDialog(t.dataset.id),
   plSave:t=>{const g=id=>document.getElementById(id).value;const nome=g('pNome').trim();if(!nome)return toast('Inserisci il nome del giocatore');const id=t.dataset.id||uid();const old=S.players.find(x=>x.id===id)||{};const pos1=g('pPos1'),pos2=g('pPos2');const p={...old,nome,nascita:g('pNasc'),ruolo:repOf(pos1)||g('pRuolo'),pos1,pos2,sottoruolo:g('pSub').trim(),posizione:pos1?pos1+(pos2?' (alt. '+pos2.toLowerCase()+')':''):(old.posizione||''),piede:g('pPiede'),stato:g('pStato'),rientro:g('pRientro'),note:g('pNote')};markReturn(p,old.stato,p.stato);delete p.id;
     const i=S.players.findIndex(x=>x.id===id);if(i>=0)S.players[i]={...p,id};else S.players.push({...p,id});put('giocatori',id,p);closeDlg();toast('Giocatore salvato');render()},
+  plNoReturn:t=>{const p=S.players.find(x=>x.id===t.dataset.id);if(!p)return;delete p.rientratoIl;delete p.rientratoDa;const {id,...rest}=p;put('giocatori',id,{...rest,rientratoIl:null,rientratoDa:null});closeDlg();render();toast(cogNome(p)+': tolta la segnalazione di rientro')},
   plDel:t=>{S.players=S.players.filter(p=>p.id!==t.dataset.id);del('giocatori',t.dataset.id);closeDlg();render()},
   mEdit:t=>mDialog(t.dataset.id),
   mSave:t=>{const g=id=>document.getElementById(id).value;if(!g('mAvv').trim()||!g('mData'))return toast('Inserisci data e avversario');const id=t.dataset.id||uid();const old=S.matches.find(x=>x.id===id)||{};
