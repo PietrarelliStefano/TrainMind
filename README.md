@@ -4,6 +4,9 @@ App della suite Mind per programmare e gestire la settimana di allenamento: morf
 
 È una pagina web unica pubblicata come artifact su claude.ai (i dati stanno nell'account, in un database dell'artifact): https://claude.ai/artifact/QUxNsMZqUz5Z3SwDAgQzvw
 
+## Versione online
+TrainMind può girare anche fuori da claude.ai, su Vercel e Supabase, con accesso su invito e dati separati per ogni allenatore: istruzioni in [ONLINE.md](ONLINE.md).
+
 ## Struttura
 - `app/trainmind.html`: la pagina pubblicata, costruita dai sorgenti.
 - `app/src/`: sorgenti.
@@ -11,6 +14,7 @@ App della suite Mind per programmare e gestire la settimana di allenamento: morf
   - `board.js`: lavagna (schemi degli esercizi, disegno, editor).
   - `app.js`: interfaccia, AI, squadre, formazione, PDF.
   - `style.css`, `body.html`.
+- `web/`, `api/`, `supabase/`: versione online (pagina, assistente sul server, database).
 - `brand/`: logo e regole del marchio (`BRAND.md`, manuale visivo in `brand.html`).
 
 ## Costruzione

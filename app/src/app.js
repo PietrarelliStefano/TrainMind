@@ -978,6 +978,7 @@ function vImpostazioni(){
   const t=team();const pr=t.principi||{};
   const fld=(id,l,v,ph)=>`<label class="f"><span>${l}</span><textarea id="${id}" placeholder="${esc(ph)}">${esc(v)}</textarea></label>`;
   return `<div class="head"><div><span class="lbl">Impostazioni</span><h1>Squadra e modello di gioco</h1><p class="sub">Il modello di gioco guida l'assistente: ogni esercizio viene progettato per allenare questi principi.</p></div><button class="btn pri" data-act="teamSave">Salva</button></div>
+  ${window.TM_CLOUD?window.TM_CLOUD.card():''}
   <div class="card stack"><h2>Squadra e calendario</h2>
     <div class="fgrid"><label class="f"><span>Nome squadra</span><input type="text" id="tNome" value="${esc(t.nome)}"></label><label class="f"><span>Categoria</span><input type="text" id="tCat" value="${esc(t.categoria)}"></label>
       <label class="f"><span>Livello</span><select id="tLiv">${['Professionisti','Semiprofessionisti','Dilettanti','Settore giovanile agonistico','Settore giovanile di base'].map(x=>`<option ${t.livello===x?'selected':''}>${x}</option>`).join('')}</select></label>
@@ -1187,7 +1188,7 @@ function updPres(){const l=document.getElementById('presList');const c=document.
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t||t.disabled)return;
   if(t.dataset.confirm&&!t.classList.contains('armed')){e.preventDefault();t.classList.add('armed');t.dataset.orig=t.textContent;t.textContent=t.dataset.confirm;setTimeout(()=>{if(t.isConnected){t.classList.remove('armed');t.textContent=t.dataset.orig}},4000);return}
-  const fn=ACT[t.dataset.act];if(fn){if(t.tagName!=='A')e.preventDefault();fn(t,e)}
+  const fn=ACT[t.dataset.act]||(window.TM_CLOUD&&String(t.dataset.act).startsWith('cloud')?(x=>window.TM_CLOUD.act(x)):null);if(fn){if(t.tagName!=='A')e.preventDefault();fn(t,e)}
 });
 document.addEventListener('change',e=>{
   const t=e.target;
