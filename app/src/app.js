@@ -130,6 +130,7 @@ function vSettimana(){
       <label class="f"><span>RPE partita</span><input type="number" min="0" max="10" step="0.5" id="wRpeP" value="${w.rpePartita??''}" data-act-change="weekField" data-k="rpePartita" placeholder="0-10"></label></div>
       <label class="f" style="margin-top:10px"><span>Idea tattica della partita</span><textarea id="wIdea" data-act-change="weekField" data-k="ideaPartita" placeholder="Es. indirizzarli a destra e aggredire; attaccare lo spazio tra i due centrali; costruzione a 3+2 se si abbassa il mediano">${esc(w.ideaPartita||'')}</textarea></label>
       <div class="row" style="margin-top:8px">${S.sample?`<button class="btn sm ai" data-act="ideaChat">Ragiona la partita con l’assistente</button>`:''}<button class="btn sm" data-act="formOpen">Formazione titolare${w.formazione&&w.formazione.slots?` (${w.formazione.slots.filter(Boolean).length}/11)`:''}</button><span class="muted" style="font-size:.82rem">Nell’ultima seduta prima della gara le squadre saranno titolari contro riserve.</span></div></details></div>
+    ${feedbackStrip(w)}
     ${aiPanel(w)}
   </div>
   <div class="days">${days}</div>
@@ -283,7 +284,7 @@ ${S.classifica&&Array.isArray(S.classifica.righe)?'CLASSIFICA ('+(S.classifica.a
 ${(()=>{const t=S.drills.filter(d=>d.usi).sort((a,b)=>(b.valutazione==='funzionato')-(a.valutazione==='funzionato')||(b.usi||0)-(a.usi||0)).slice(0,25);return t.length?'ESERCIZI GIÀ SVOLTI DAL GRUPPO (libreria del mister; riproponi o adatta quelli funzionati, evita di ripetere identici quelli da rivedere): '+t.map(d=>`${d.nome} [${CATS[d.cat]||d.cat}, ${d.giocatori||''}, ${d.usi} volte${d.valutazione?', '+d.valutazione:''}]`).join('; '):''})()}`;
 }
 function prevWeekSummary(startIso){const id=iso(addDays(parseIso(startIso),-7));const w=S.weeks[id];if(!w)return 'SETTIMANA PRECEDENTE: non registrata.';const t=team();
-  return `SETTIMANA PRECEDENTE (${id}): obiettivo "${w.obiettivo||'-'}"; carico pianificato ${dailyLoads(w,t,false).reduce((a,b)=>a+b,0)} UA, rilevato ${dailyLoads(w,t,true).reduce((a,b)=>a+b,0)} UA. Sedute: ${(w.sessioni||[]).map(s=>`${DAYS[s.giorno]} ${s.md} ${s.tipo} ${s.durata}' RPE ${s.rpe}${s.rpeReale!=null?' (reale '+s.rpeReale+')':''}${Array.isArray(s.presenti)?' presenti '+s.presenti.length:''}${s.note?' nota: '+s.note:''}`).join(' | ')}`}
+  return `SETTIMANA PRECEDENTE (${id}): obiettivo "${w.obiettivo||'-'}"; carico pianificato ${dailyLoads(w,t,false).reduce((a,b)=>a+b,0)} UA, rilevato ${dailyLoads(w,t,true).reduce((a,b)=>a+b,0)} UA. Sedute: ${(w.sessioni||[]).map(s=>`${DAYS[s.giorno]} ${s.md} ${s.tipo} ${s.durata}' RPE ${s.rpe}${s.rpeReale!=null?' (reale '+s.rpeReale+')':''}${Array.isArray(s.presenti)?' presenti '+s.presenti.length:''}${s.note?' nota: '+s.note:''}`).join(' | ')}${w.feedback?'\n'+feedbackText(w):''}`}
 /* Giorni da progettare: nella settimana in corso solo da oggi in avanti e non già svolti */
 function aiDefaultDays(w,giorni){const cur=iso(mondayOf(new Date()))===w.id;const today=(new Date().getDay()+6)%7;
   return giorni.filter(d=>!(cur&&d<today)&&!(w.sessioni||[]).some(s=>s.giorno===d&&s.done))}
@@ -520,6 +521,64 @@ function proposeTitolari(s,w){const F=w.formazione;const pres=presentIds(s);cons
   const titOut=tit.filter(id=>P(id)&&P(id).ruolo!=='POR'),titGk=tit.filter(id=>P(id)&&P(id).ruolo==='POR');const ris=pres.filter(id=>!tit.includes(id));const risOut=ris.filter(id=>P(id)&&P(id).ruolo!=='POR'),risGk=ris.filter(id=>P(id)&&P(id).ruolo==='POR');
   const split=ids=>{const g=optimize(ids.map(P).filter(Boolean),2,[],false)||[[],[]];return {A:g[0].map(p=>p.id),B:(g[1]||[]).map(p=>p.id)}};
   return {n:2,modo:'titolari',sistemi:[F.sistema,w.sistemaAvversario].filter(x=>x&&needsOf(x)),squadre:[{nome:'Titolari',ids:titOut,sub:split(titOut),portieri:titGk},{nome:'Riserve',ids:risOut,sub:split(risOut),portieri:risGk}],creato:todayIso()}}
+/* ===== Feedback della partita: come è andata, per preparare la settimana dopo ===== */
+const FB_MIN=[['','—'],['0','Non entrato'],['15',"Fino a 30'"],['45',"30-60'"],['75',"60-90'"],['90',"Tutta"]];
+const FB_FIS=[['','Ok'],['acciaccato','Acciaccato'],['infortunato','Infortunato']];
+function matchOfWeek(w){const md=matchDayOf(w);if(md==null||md==='')return null;const d=iso(addDays(parseIso(w.id),Number(md))),end=iso(addDays(parseIso(w.id),6));return S.matches.find(m=>m.data===d)||S.matches.find(m=>m.data>=w.id&&m.data<=end&&m.competizione!=='Amichevole')||null}
+function feedbackStrip(w){const f=w.feedback;const md=matchDayOf(w);if(md==null||md==='')return '';if(!f&&iso(addDays(parseIso(w.id),Number(md)))>todayIso())return '';
+  if(!f)return `<div class="row" style="margin-top:8px;justify-content:space-between;flex-wrap:wrap;gap:8px"><span class="muted" style="font-size:.88rem">Finita la partita, registra com’è andata: servirà a preparare la settimana dopo.</span><button class="btn sm" data-act="fbOpen">Com’è andata?</button></div>`;
+  return `<div class="callout" style="margin-top:8px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><span><b>Feedback partita</b>${f.golFatti!==''&&f.golFatti!=null?` · ${esc(f.golFatti)}-${esc(f.golSubiti)}`:''}${f.idea?` · idea tattica: ${esc(f.idea)}`:''}</span><button class="btn sm" data-act="fbOpen">Modifica</button></div>${f.ai&&f.ai.priorita?`<p style="font-size:.88rem;margin-top:6px"><b>Priorità per la prossima settimana:</b> ${f.ai.priorita.map(esc).join(' · ')}</p>`:''}</div>`}
+function fbDialog(){const w=getWeek(S.weekStart);const f=w.feedback||{};const m=matchOfWeek(w);const t=team();
+  const conv=sortPlayers(S.players);const mins=f.minuti||{};const fis=f.fisico||{};
+  const gf=f.golFatti??(m?m.golFatti:'')??'',gs=f.golSubiti??(m?m.golSubiti:'')??'';
+  const voto=(k)=>`<select data-fbv="${k}" style="width:auto"><option value="">—</option>${[1,2,3,4,5].map(n=>`<option ${String((f.fasi||{})[k]?.voto||'')===String(n)?'selected':''}>${n}</option>`).join('')}</select>`;
+  document.getElementById('dlg').innerHTML=`<div class="dlg"><header><div><span class="lbl">Partita${w.avversario||m?.avversario?' contro '+esc(w.avversario||m.avversario):''}</span><h2>Com’è andata?</h2></div><button class="btn ghost" data-act="dlgClose" aria-label="Chiudi">✕</button></header><div class="body">
+    <div class="fgrid"><label class="f"><span>Gol fatti</span><input type="number" min="0" id="fbGf" value="${esc(gf)}"></label><label class="f"><span>Gol subiti</span><input type="number" min="0" id="fbGs" value="${esc(gs)}"></label>
+      <label class="f"><span>RPE partita (0-10)</span><input type="number" min="0" max="10" step="0.5" id="fbRpe" value="${esc(w.rpePartita??'')}"></label>
+      <label class="f"><span>Stato del gruppo dopo la gara</span><select id="fbStato">${STATI_GRUPPO.map(x=>`<option value="${esc(x)}" ${(f.statoGruppo||'')===x?'selected':''}>${x||'Non indicato'}</option>`).join('')}</select></label></div>
+    ${w.ideaPartita?`<div class="callout"><span class="lbl">Idea tattica preparata</span><p style="font-size:.9rem;margin-top:4px">${esc(w.ideaPartita)}</p></div>`:''}
+    <div class="fgrid"><label class="f"><span>L’idea tattica ha funzionato?</span><select id="fbIdea"><option value="">—</option>${['sì','in parte','no'].map(x=>`<option ${f.idea===x?'selected':''}>${x}</option>`).join('')}</select></label>
+      <label class="f"><span>Perché</span><input type="text" id="fbIdeaN" value="${esc(f.ideaNote||'')}" placeholder="Es. l'uscita a 3 ha funzionato, il quinto non ha mai attaccato la profondità"></label></div>
+    <div class="f"><span class="lbl">Voto per fase (1 = male, 5 = bene) e cosa hai visto</span>
+      <div class="stack" style="gap:6px;margin-top:6px">${FASI_GIOCO.map(([k,l])=>`<div class="row" style="gap:8px;flex-wrap:wrap"><span style="min-width:160px">${esc(l)}</span>${voto(k)}<input type="text" data-fbn="${k}" value="${esc((f.fasi||{})[k]?.nota||'')}" placeholder="Cosa è successo" style="flex:1;min-width:180px"></div>`).join('')}</div></div>
+    <div class="fgrid"><label class="f"><span>Cosa ha funzionato</span><textarea id="fbOk">${esc(f.ok||'')}</textarea></label><label class="f"><span>Cosa non ha funzionato</span><textarea id="fbKo">${esc(f.ko||'')}</textarea></label></div>
+    <label class="f"><span>Come sono nati i gol (fatti e subiti)</span><textarea id="fbGol" placeholder="Es. 1-0 su cross dalla destra; 1-1 transizione negativa dopo palla persa in uscita">${esc(f.gol||'')}</textarea></label>
+    <details class="more" ${Object.keys(mins).length||Object.keys(fis).length?'open':''}><summary>Minuti giocati e condizione fisica</summary><div class="f" style="margin-top:8px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><span class="muted" style="font-size:.85rem">Servono per il carico dei primi giorni della settimana.</span>${w.formazione&&w.formazione.slots?`<button class="btn sm" data-act="fbTit">Titolari: tutta la partita</button>`:''}</div>
+      <div class="stack" style="gap:4px;margin-top:6px" id="fbPl">${conv.map(p=>`<div class="row" style="gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:4px"><span style="flex:1;min-width:150px">${esc(cogNome(p))}</span><select data-fbm="${p.id}" style="width:auto" aria-label="Minuti di ${esc(p.nome)}">${FB_MIN.map(([v,l])=>`<option value="${v}" ${String(mins[p.id]??'')===v?'selected':''}>${l}</option>`).join('')}</select><select data-fbf="${p.id}" style="width:auto" aria-label="Condizione di ${esc(p.nome)}">${FB_FIS.map(([v,l])=>`<option value="${v}" ${(fis[p.id]||'')===v?'selected':''}>${l}</option>`).join('')}</select></div>`).join('')}</div>
+      <p class="muted" style="font-size:.82rem">Chi segni come acciaccato o infortunato viene aggiornato anche nella rosa.</p></div></details>
+    <label class="f"><span>Altre note</span><textarea id="fbNote">${esc(f.note||'')}</textarea></label>
+    ${S.sample?`<div class="aibox" id="fbAi">${fbAiHtml(f)}</div>`:''}
+  </div><footer><button class="btn" data-act="dlgClose">Annulla</button><button class="btn pri" data-act="fbSave">Salva il feedback</button></footer></div>`;
+  const d=document.getElementById('dlg');if(!d.open)d.showModal()}
+function fbAiHtml(f){const a=f.ai;const nx=iso(addDays(parseIso(S.weekStart),7));
+  if(S.fbBusy)return `<p>Sto leggendo la partita e preparo le priorità della prossima settimana…</p>`;
+  if(!a)return `<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><span style="font-size:.9rem">Dal feedback ricavo cosa allenare la settimana prossima.</span><button class="btn ai sm" data-act="fbAi">Proponi le priorità</button></div>`;
+  return `<h3>Per la settimana del ${fmtDay(parseIso(nx))}</h3>${a.sintesi?`<p style="font-size:.9rem">${esc(a.sintesi)}</p>`:''}<ol style="margin:0;padding-left:20px">${(a.priorita||[]).map(x=>`<li>${esc(x)}</li>`).join('')}</ol>${a.obiettivo?`<p style="font-size:.9rem"><b>Obiettivo proposto:</b> ${esc(a.obiettivo)}</p>`:''}${a.carico?`<p style="font-size:.9rem"><b>Carico:</b> ${esc(a.carico)}</p>`:''}
+    <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn pri sm" data-act="fbUse">Usa per la prossima settimana</button><button class="btn sm" data-act="fbAi">Rigenera</button></div>`}
+function fbCollect(){const g=id=>document.getElementById(id);const w=getWeek(S.weekStart);const old=w.feedback||{};
+  const fasi={};FASI_GIOCO.forEach(([k])=>{const v=document.querySelector(`[data-fbv="${k}"]`)?.value||'';const n=(document.querySelector(`[data-fbn="${k}"]`)?.value||'').trim();if(v||n)fasi[k]={voto:v?Number(v):null,nota:n}});
+  const minuti={},fisico={};document.querySelectorAll('[data-fbm]').forEach(el=>{if(el.value!=='')minuti[el.dataset.fbm]=Number(el.value)});document.querySelectorAll('[data-fbf]').forEach(el=>{if(el.value)fisico[el.dataset.fbf]=el.value});
+  return {...old,golFatti:g('fbGf').value,golSubiti:g('fbGs').value,statoGruppo:g('fbStato').value,idea:g('fbIdea').value,ideaNote:g('fbIdeaN').value.trim(),fasi,ok:g('fbOk').value.trim(),ko:g('fbKo').value.trim(),gol:g('fbGol').value.trim(),minuti,fisico,note:g('fbNote').value.trim(),data:todayIso(),rpe:g('fbRpe').value}}
+/* Testo del feedback per l'assistente (anche nel riepilogo della settimana precedente) */
+function feedbackText(w){const f=w&&w.feedback;if(!f)return '';const nm=id=>{const p=S.players.find(x=>x.id===id);return p?cognome(p):null};
+  const lab=Object.fromEntries(FASI_GIOCO.map(([k,l])=>[k,l]));const minTxt=v=>v===0?'non entrato':v>=90?'90\'':v>=75?'60-90\'':v>=45?'30-60\'':'fino a 30\'';
+  const molti=Object.entries(f.minuti||{}).filter(([,v])=>v>=75).map(([id])=>nm(id)).filter(Boolean),poco=Object.entries(f.minuti||{}).filter(([,v])=>v<45).map(([id,v])=>nm(id)?nm(id)+' ('+minTxt(v)+')':null).filter(Boolean);
+  return `FEEDBACK DELLA PARTITA${w.avversario?' contro '+w.avversario:''}: risultato ${f.golFatti||'?'}-${f.golSubiti||'?'}; RPE ${w.rpePartita??f.rpe??'?'}; stato del gruppo: ${f.statoGruppo||'non indicato'}.
+Idea tattica${w.ideaPartita?' ("'+w.ideaPartita+'")':''}: ${f.idea||'non valutata'}${f.ideaNote?' – '+f.ideaNote:''}.
+Fasi: ${Object.entries(f.fasi||{}).map(([k,v])=>`${lab[k]||k} ${v.voto?v.voto+'/5':''}${v.nota?' – '+v.nota:''}`).join('; ')||'non valutate'}.
+Ha funzionato: ${f.ok||'-'}. Non ha funzionato: ${f.ko||'-'}. Gol: ${f.gol||'-'}.
+Minuti: molto impiegati ${molti.join(', ')||'-'}; poco o niente ${poco.join(', ')||'-'}. Problemi fisici: ${Object.entries(f.fisico||{}).map(([id,v])=>nm(id)?nm(id)+' '+v:null).filter(Boolean).join(', ')||'nessuno'}.${f.note?' Note: '+f.note:''}`}
+async function fbAiGen(){const w=getWeek(S.weekStart);const f=fbCollect();saveWeek({...w,feedback:f,rpePartita:f.rpe===''?w.rpePartita:Number(f.rpe)});S.fbBusy=true;document.getElementById('fbAi').innerHTML=fbAiHtml(f);
+  try{const r=await S.sample.json(`Sei il collaboratore tecnico di un allenatore di calcio italiano. La partita è finita: leggi il feedback del mister e indica cosa allenare la settimana prossima.
+${METODO}
+${teamContext()}
+${feedbackText({...w,feedback:f})}
+SETTIMANA APPENA CONCLUSA: obiettivo "${w.obiettivo||'-'}"; sedute: ${(w.sessioni||[]).map(s=>`${DAYS[s.giorno]} ${normMd(s.md)}: ${s.titolo}`).join(' | ')||'-'}.
+Collega le priorità al modello di gioco (VOGLIO/OGGI) e alle fasi con voto più basso; tieni conto di minuti giocati e problemi fisici per il carico dei primi giorni.
+Rispondi SOLO con JSON: {"sintesi":"2-3 frasi su com'è andata","priorita":["3 priorità concrete e allenabili, in ordine"],"obiettivo":"obiettivo tattico della prossima settimana in una frase","carico":"indicazione sul carico dei primi giorni, con eventuali nomi","indicazioni":"3-5 righe di indicazioni da dare all'assistente per progettare la settimana"}`,{modelTier:'default'});
+    const ww=getWeek(S.weekStart);saveWeek({...ww,feedback:{...(ww.feedback||f),ai:{sintesi:String(r.sintesi||''),priorita:(Array.isArray(r.priorita)?r.priorita:[]).map(String).slice(0,5),obiettivo:String(r.obiettivo||''),carico:String(r.carico||''),indicazioni:String(r.indicazioni||'')}}})}
+  catch(e){toast(e?.code==='rate_limited'?'Troppe richieste: riprova tra poco':'Proposta non riuscita')}
+  S.fbBusy=false;const el=document.getElementById('fbAi');if(el)el.innerHTML=fbAiHtml(getWeek(S.weekStart).feedback||{})}
 function formDialog(){const w=getWeek(S.weekStart);const sysList=sistemi().map(x=>x.nome);const F=w.formazione||{};const sys=F.sistema||w.sistemaPartita||sysList[0]||'1-4-3-3';const slots=slotsOf(sys);const cur=F.sistema===sys&&Array.isArray(F.slots)?F.slots:proposeFormation(sys);
   const av=sortPlayers(availPlayers());const used=new Set(cur.filter(Boolean));const ris=av.filter(p=>!used.has(p.id));
   document.getElementById('dlg').innerHTML=`<div class="dlg"><header><div><span class="lbl">Partita${w.avversario?' contro '+esc(w.avversario):''}</span><h2>Formazione titolare</h2></div><button class="btn ghost" data-act="dlgClose" aria-label="Chiudi">✕</button></header><div class="body">
@@ -1069,7 +1128,7 @@ Oggi è ${DAYS_FULL[(new Date().getDay()+6)%7]} ${todayIso()}.`;
 const closeDlg=()=>{const d=document.getElementById('dlg');if(d.open)d.close();ED=null;DD=null};
 const ACT={
   wk:t=>{const d=Number(t.dataset.d);S.weekStart=d===0?iso(mondayOf(new Date())):iso(addDays(parseIso(S.weekStart),d));S.ai=null;render()},
-  aiOpen:()=>{S.ai={week:S.weekStart,state:'form'};render();setTimeout(()=>document.getElementById('aiReq')?.focus(),0)},
+  aiOpen:()=>{S.ai={week:S.weekStart,state:'form',req:getWeek(S.weekStart).indicazioni||''};render();setTimeout(()=>document.getElementById('aiReq')?.focus(),0)},
   aiClose:()=>{S.ai=null;render()},
   aiGen:()=>aiGenerate(),
   aiStop:()=>{S.ai?.ac?.abort();S.ai={week:S.weekStart,state:'form',req:S.ai?.req,days:S.ai?.days};render()},
@@ -1102,6 +1161,15 @@ const ACT={
   stView:t=>{const e=ED.s.esercizi[Number(t.dataset.i)];const st=e.step[Number(t.dataset.k)];openBoard(st.schema,{title:e.nome+' · step '+(Number(t.dataset.k)+1),ctx:{descrizione:st.descrizione},readOnly:true})},
   teamsTit:()=>{const w=getWeek(ED.wid);if(!w.formazione)return toast('Imposta prima la formazione titolare');ED.s.squadreSeduta=proposeTitolari(ED.s,w);ED.teamsEdit=false;persistED();drawEditor()},
   formOpen:()=>formDialog(),
+  fbOpen:()=>fbDialog(),
+  fbTit:()=>{const w=getWeek(S.weekStart);(w.formazione.slots||[]).filter(Boolean).forEach(id=>{const el=document.querySelector(`[data-fbm="${id}"]`);if(el)el.value='90'})},
+  fbAi:()=>fbAiGen(),
+  fbSave:()=>{const w=getWeek(S.weekStart);const f=fbCollect();const rpe=f.rpe===''?w.rpePartita:Number(f.rpe);saveWeek({...w,feedback:f,rpePartita:rpe});
+    Object.entries(f.fisico).forEach(([id,st])=>{const p=S.players.find(x=>x.id===id);if(p&&p.stato!==st&&!(p.stato==='infortunato'&&st==='acciaccato')){markReturn(p,p.stato,st);p.stato=st;const {id:_,...rest}=p;put('giocatori',id,rest)}});
+    const m=matchOfWeek(w);if(m&&f.golFatti!==''){const {id,...rest}=m;const nm={...rest,golFatti:f.golFatti,golSubiti:f.golSubiti,giocata:true,analisi:[f.ok&&'Bene: '+f.ok,f.ko&&'Male: '+f.ko,f.gol&&'Gol: '+f.gol].filter(Boolean).join(' · ')||m.analisi||''};Object.assign(m,nm);put('partite',id,nm)}
+    closeDlg();toast('Feedback salvato: lo uso per preparare la prossima settimana');render()},
+  fbUse:()=>{const w=getWeek(S.weekStart);const a=(w.feedback||{}).ai;if(!a)return;const nid=iso(addDays(parseIso(S.weekStart),7));const n=getWeek(nid);
+    saveWeek({...n,obiettivo:n.obiettivo||a.obiettivo,statoGruppo:(w.feedback||{}).statoGruppo||n.statoGruppo,indicazioni:a.indicazioni+(a.carico?'\nCarico: '+a.carico:'')});closeDlg();S.weekStart=nid;S.ai={week:nid,state:'form',req:a.indicazioni+(a.carico?'\nCarico: '+a.carico:'')};render();toast('Prossima settimana impostata: controlla e genera')},
   formAuto:()=>{const sys=document.getElementById('fSys').value;const res=proposeFormation(sys);document.querySelectorAll('#fSlots [data-slot]').forEach(el=>{el.value=res[Number(el.dataset.slot)]||''})},
   formSave:()=>{const w=getWeek(S.weekStart);const sys=document.getElementById('fSys').value;const slots=[...document.querySelectorAll('#fSlots [data-slot]')].map(el=>el.value);const dup=slots.filter(Boolean).filter((x,i,a)=>a.indexOf(x)!==i);if(dup.length)return toast('Un giocatore è in due ruoli: correggi prima di salvare');saveWeek({...w,formazione:{sistema:sys,slots,creato:todayIso()},sistemaPartita:w.sistemaPartita||sys});closeDlg();toast('Formazione salvata')},
   ideaChat:()=>{const w=getWeek(S.weekStart);const md=matchDayOf(w);S.chatOpen=true;renderChat();chatSend(`Ragioniamo insieme l'idea tattica della partita${md!=null&&md!==''?' di '+DAYS_FULL[md].toLowerCase():''}${w.avversario?' contro '+w.avversario:''}${w.sistemaAvversario?' (giocano con il '+w.sistemaAvversario+')':''}. Partendo dal nostro modello di gioco, dal sistema ${w.sistemaPartita||'che ritieni più adatto'} e dalle caratteristiche dei nostri giocatori, proponimi 4-5 principi chiave per la partita (costruzione, non possesso e direzione della pressione, transizioni, dove attaccarli) e una formazione titolare con i ruoli. Poi chiedimi cosa ne penso.`)},
