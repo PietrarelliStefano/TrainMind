@@ -58,9 +58,9 @@ const gkDefault=(d)=>{const t=team();const g=t.prepPortieri||'a volte';return g=
 const prettySis=n=>/^\d{3,5}$/.test(n)?'1-'+n.split('').join('-'):n;
 const sistemi=()=>{const t=team();if(Array.isArray(t.sistemi)&&t.sistemi.length)return t.sistemi.filter(x=>x&&x.nome);return String(t.sistema||'').split(/[\/,]/).map(x=>x.trim()).filter(Boolean).map(n=>({nome:prettySis(n),uso:'',stato:'in costruzione'}))};
 const STATI_SIS=[['introduzione','Introduzione'],['in costruzione','In costruzione'],['consolidato','Consolidato']];
-function titRule(w){if(!w)return '';const t=team();const md=matchDayOf(w);if(md==null||md==='')return '';const g=(t.giorni||[]).filter(d=>d<Number(md));if(!g.length)return '';const eve=Math.max(...g);const F=w.formazione;const nm=id=>{const p=S.players.find(x=>x.id===id);return p?cognome(p):''};
+function titRule(w){if(!ruleOn('titolari'))return '';if(!w)return '';const t=team();const md=matchDayOf(w);if(md==null||md==='')return '';const g=(t.giorni||[]).filter(d=>d<Number(md));if(!g.length)return '';const eve=Math.max(...g);const F=w.formazione;const nm=id=>{const p=S.players.find(x=>x.id===id);return p?cognome(p):''};
   return `SQUADRE DELLA SETTIMANA: nell'ultima seduta prima della partita (${DAYS_FULL[eve]}) le squadre sono TITOLARI${F&&F.slots?' ('+F.sistema+': '+F.slots.map(nm).filter(Boolean).join(', ')+')':''} contro RISERVE che simulano il sistema dell'avversario${w.sistemaAvversario?' ('+w.sistemaAvversario+')':''}: progetta quella seduta con lavori tattici e partita titolari contro riserve. Negli altri giorni le squadre sono miste ed equilibrate.${w.ideaPartita?'\nIDEA TATTICA DELLA PARTITA (concordata con il mister): '+w.ideaPartita:''}`}
-function sisRule(w){const ss=sistemi();if(!ss.length)return '';const sp=w&&w.sistemaPartita;
+function sisRule(w){if(!ruleOn('sistema'))return '';const ss=sistemi();if(!ss.length)return '';const sp=w&&w.sistemaPartita;
   const crit=ss.map(x=>x.nome+(x.uso?' = '+x.uso:'')+' ('+(x.stato||'in costruzione')+')').join('; ');
   return `SISTEMI DI GIOCO della squadra: ${crit}.
 ${sp?`SISTEMA DELLA SETTIMANA: ${sp}. Tutti gli esercizi legati a un sistema (fase difensiva, prima pressione, costruzione, partite a tema) si fanno SOLO con il ${sp}: reparti, numeri e posizioni devono essere quelli del ${sp}. Non proporre lavori sull'altro sistema a meno che il mister lo chieda nelle indicazioni.`:`Il sistema per la partita non è ancora deciso: scegline UNO in base ai criteri d'uso indicati sopra e all'avversario, scrivi la scelta e il motivo nelle note, e usa SOLO quello per tutta la settimana.`}
@@ -185,7 +185,7 @@ function multiWeekChart(){
 }
 
 /* ===== AI: progettazione della settimana ===== */
-const METODO=`METODOLOGIA (Periodizzazione Tattica, morfociclo standard):
+const METODO_BASE=`METODOLOGIA (Periodizzazione Tattica, morfociclo standard):
 - Il Modello di gioco guida tutto: ogni esercizio allena principi e sotto-principi del modello, in modo specifico (con palla, avversari, direzione di gioco quando possibile).
 - Alternanza orizzontale dei carichi rispetto alla partita (MD): MD+1 recupero; MD+2 / MD+3 Tensione (si contano i giorni dalla partita giocata) (spazi ridotti, alta densità di duelli, contrazioni intense, sotto-principi); MD-3 Durata (spazi ampi, numeri vicini all'11c11, grandi principi, giorno più carico); MD-2 Velocità (spazi ampi, bassa densità, esecuzioni rapide, recuperi completi, volume ridotto); MD-1 Attivazione (volume basso, palle inattive, strategia).
   Con 3 sedute: MD+2 ripresa + tensione, MD-3 durata, MD-2 velocità + palle inattive + strategia sull'avversario.
@@ -211,7 +211,7 @@ function appOf(e){const pt=parseTeams(e);if(!pt.sizes.length)return null;const g
   const n=perField+gk;if(!n||!area)return null;return {app:Math.round(area/n),n,area:Math.round(area)}}
 function appBadge(e,md){const t=appType(e,md);const a=appOf(e);if(!t||!a)return '';const [lo,hi]=appRanges()[t]||[0,1e9];const ok=a.app>=lo&&a.app<=hi;const lbl=(APP_TYPES.find(x=>x[0]===t)||[])[1]||t;
   return `<span class="pill ${ok?'ok':'warn'}" title="${esc(lbl)}: ${lo}-${hi} m² per giocatore">${a.app} m²/giocatore${ok?'':a.app<lo?' · stretto':' · largo'}</span>`}
-function designRule(){return `PRINCIPI DI PROGETTAZIONE (basati sull'evidenza, obbligatori):
+function designRule(){if(!ruleOn('evidenze'))return '';return `PRINCIPI DI PROGETTAZIONE (basati sull'evidenza, obbligatori):
 - Forme di gioco prima di tutto: nella parte centrale privilegia esercizi con avversari, direzione e decisioni (apprendimento rappresentativo: si trasferisce in partita ciò che si allena con gli stessi stimoli di gara). Esercitazioni analitiche senza opposizione solo brevi e collegate al gioco che segue.
 - Usa i vincoli in modo intenzionale, sapendo cosa producono:
   · numero di giocatori e dimensioni sono i vincoli più potenti: spazi e numeri ridotti = più azioni tecniche e duelli; spazi ampi = più ampiezza, profondità, distanze tra squadre e corsa;
@@ -225,13 +225,13 @@ function designRule(){return `PRINCIPI DI PROGETTAZIONE (basati sull'evidenza, o
 - Esercizi a step: per transizioni e situazioni progressive proponi UN esercizio con 2-3 step (es. 1c0 → 1c1 → 2c1; 3c3 → 4c4 → 5c5; 4c3 → 5c4 → squadra contro squadra) compilando "step" con titolo, giocatori e descrizione di ogni fase; lo schema mostra il primo step. Se l'esercizio non è progressivo ometti "step".
 - Conduzione del mister: poche indicazioni e brevi, domande guida durante le pause (es. "dove c'era lo spazio?"), lascia giocare durante i blocchi.
 - Per ogni esercizio compila "vincoli": le regole usate e l'effetto atteso in campo (es. "2 tocchi → circolazione veloce; campo lungo 40x30 → attacco della profondità; gol doppio dopo recupero in 5" → riaggressione").`}
-function appRule(){const r=appRanges();return `SPAZIO PER GIOCATORE (m² = area del campo / giocatori in quel campo, portieri inclusi se in porta; con 2 campi conta un campo): rispetta questi intervalli per tipo di lavoro: ${APP_TYPES.map(([k,l])=>`${l} ${r[k][0]}-${r[k][1]}`).join('; ')}. Riferimenti: sotto ~150 m² per giocatore i giochi non riproducono la corsa ad alta velocità di gara, ~200-210 m² per lo sprint (Riboli et al. 2022, U15-U19); i giochi senza portieri richiedono meno spazio di quelli con portieri a parità di intensità. Scrivi sempre lo spazio come "AxB m" e aggiungi il calcolo, es. "30x25 m (≈ 83 m² per giocatore)".`}
-function condRule(){const t=team();if(t.prepAtletico==='si')return '';return `LAVORO CONDIZIONALE (non c'è preparatore atletico, lo pianifichi tu): distribuisci nella settimana forza, prevenzione, resistenza e velocità coerenti con il giorno MD, preferendo il lavoro integrato con palla (rapporto lavoro/recupero, dimensione del campo, numero di giocatori) e aggiungendo brevi blocchi a secco quando servono:
+function appRule(){if(!ruleOn('spazio'))return '';const r=appRanges();return `SPAZIO PER GIOCATORE (m² = area del campo / giocatori in quel campo, portieri inclusi se in porta; con 2 campi conta un campo): rispetta questi intervalli per tipo di lavoro: ${APP_TYPES.map(([k,l])=>`${l} ${r[k][0]}-${r[k][1]}`).join('; ')}. Riferimenti: sotto ~150 m² per giocatore i giochi non riproducono la corsa ad alta velocità di gara, ~200-210 m² per lo sprint (Riboli et al. 2022, U15-U19); i giochi senza portieri richiedono meno spazio di quelli con portieri a parità di intensità. Scrivi sempre lo spazio come "AxB m" e aggiungi il calcolo, es. "30x25 m (≈ 83 m² per giocatore)".`}
+function condRule(){if(!ruleOn('condizionale'))return '';const t=team();if(t.prepAtletico==='si')return '';return `LAVORO CONDIZIONALE (non c'è preparatore atletico, lo pianifichi tu): distribuisci nella settimana forza, prevenzione, resistenza e velocità coerenti con il giorno MD, preferendo il lavoro integrato con palla (rapporto lavoro/recupero, dimensione del campo, numero di giocatori) e aggiungendo brevi blocchi a secco quando servono:
 - giorno di tensione/MD+2: forza e prevenzione infortuni (es. 8-10' a secco: nordic hamstring, adduttori Copenhagen, polpacci, core, salti e atterraggi) più giochi a campo ridotto ad alta intensità;
 - MD-3 (durata): resistenza specifica con blocchi lunghi in spazi ampi o intermittente a secco breve (es. 15"-15");
 - MD-2: velocità e accelerazioni brevi (sprint 10-20 m con recupero completo), volume basso.
 Per ogni esercizio compila "condizionale" con l'obiettivo fisico e i parametri (es. "intermittente 1' lavoro/1' recupero, alta intensità", "forza eccentrica ischiocrurali 3x6").`}
-function dayRule(giorni){const t=team();const st=t.stileGiorni||{};const r=giorni.filter(d=>st[d]).map(d=>`${DAYS_FULL[d]}: ${st[d]}`);return r.length?`IMPOSTAZIONE PREFERITA DAL MISTER PER I GIORNI (rispettala, integrandola con la logica MD): ${r.join(' | ')}`:''}
+function dayRule(giorni){if(!ruleOn('giorni'))return '';const t=team();const st=t.stileGiorni||{};const r=giorni.filter(d=>st[d]).map(d=>`${DAYS_FULL[d]}: ${st[d]}`);return r.length?`IMPOSTAZIONE PREFERITA DAL MISTER PER I GIORNI (rispettala, integrandola con la logica MD): ${r.join(' | ')}`:''}
 function groupRule(w){const a=w&&w.statoGruppo,b=w&&w.obiettivoGruppo;return a||b?`STATO E OBIETTIVO DEL GRUPPO (oltre agli aspetti tecnico-tattici): ${a?'stato mentale: '+a+'. ':''}${b?'cosa vuole ottenere il mister dal gruppo: '+b+'. ':''}Scegli forme di esercizio, competizione, punteggi, squadre e clima della seduta adatti a questo (es. sfide a punteggio e squadre fisse per la competitività, giochi ad alta riuscita per ritrovare fiducia, esercizi cognitivi con regole che cambiano per la concentrazione).`:''}
 function staffRule(w){const t=team();const gk=t.prepPortieri||'a volte';const days=w&&Array.isArray(w.gkCoach)?w.gkCoach:(t.gkDays&&gk==='a volte'?t.gkDays.map(Number):null);
   const gkTxt=gk==='mai'?'Non c’è preparatore dei portieri: ogni esercizio coinvolge i portieri con compiti da portiere (porta, uscite, prese alte, rinvii, costruzione, jolly con i piedi nei possessi).':`Preparatore dei portieri: ${days?(days.length?'presente '+days.map(d=>DAYS_FULL[d]).join(', ')+'; negli altri giorni non c’è':'questa settimana non c’è'):(gk==='sempre'?'sempre presente':'non sempre presente, non contarci')}. Quando c’è, i portieri possono fare i primi 15-25' di lavoro specifico con lui e poi entrano negli esercizi. Quando NON c’è, ogni esercizio coinvolge i portieri con compiti da portiere: in porta, uscite, prese alte sui cross, rinvii e costruzione dal basso, come jolly di appoggio con i piedi nei possessi; mai portieri fermi o usati a caso come giocatori di movimento.`;
@@ -245,7 +245,7 @@ function staffRule(w){const t=team();const gk=t.prepPortieri||'a volte';const da
 - Per ogni esercizio compila "organizzazione": come preparare il campo, dove mettere i palloni, dove si posiziona l'allenatore e come passare all'esercizio successivo.`}
 function finRule(){const f=Number(team().partitaFinale??15);return f?`
 Ogni seduta TERMINA con una PARTITA (ultimo esercizio, fase "finale", nome che inizia con "Partita") di almeno ${f}': libera o a tema su un principio della seduta o della settimana, con numeri e portieri esatti. Dopo la partita al massimo un breve defaticamento.`:''}
-function attRule(){const a=Number(team().attivazione??10);return (a?`Ogni seduta inizia SEMPRE con l'esercizio di attivazione di ${a}' (fase "attivazione", mobilità e andature, senza schema): nel giorno di tensione/MD+2 con elasticità e balzi bassi, in MD-3 con andature ampie e allunghi, in MD-2/MD-1 con frequenza e partenze reattive. Gli altri esercizi coprono i minuti restanti.`:'')+finRule()}
+function attRule(){if(!ruleOn('attivazione'))return '';const a=Number(team().attivazione??10);return (a?`Ogni seduta inizia SEMPRE con l'esercizio di attivazione di ${a}' (fase "attivazione", mobilità e andature, senza schema): nel giorno di tensione/MD+2 con elasticità e balzi bassi, in MD-3 con andature ampie e allunghi, in MD-2/MD-1 con frequenza e partenze reattive. Gli altri esercizi coprono i minuti restanti.`:'')+finRule()}
 /* Allenatore di riferimento: le sedute seguono i suoi principi, adattati alla squadra */
 function coachRule(){const t=team();const a=(t.allenatoreRif||'').trim(),pr=(t.principiRif||'').trim();if(!a&&!pr)return '';
   return `ALLENATORE DI RIFERIMENTO${a?': '+a:''}. Struttura la settimana e scegli gli esercizi secondo i suoi principi${a?' (idea di gioco, organizzazione del microciclo, tipi di esercitazioni ricorrenti, linguaggio)':''}, adattandoli a livello, numeri e risorse di questa squadra (allenatore solo in campo, durate e sedute indicate).${pr?' Principi indicati dal mister: '+pr+'.':''} Usa solo elementi che conosci con sicurezza e che sono documentati (libri, interviste, sedute pubbliche); non attribuirgli esercizi inventati. Nel razionale o nel principio scrivi quale suo principio stai applicando.`}
@@ -300,6 +300,7 @@ function aiPanel(w){
     <div class="f"><span class="lbl">Sedute da progettare</span><div class="checks" id="aiDays" style="margin-top:6px">${giorni.map(d=>{const old=(w.sessioni||[]).find(s=>s.giorno===d);const sel=(a.days||aiDefaultDays(w,giorni)).includes(d);return `<label><input type="checkbox" value="${d}" ${sel?'checked':''}>${DAYS_FULL[d]} ${mdLabel(d,md)||''}${old?` <span class="muted" style="font-size:.8rem">${old.done?'(svolta)':'(c’è già)'}</span>`:''}</label>`}).join('')}</div><p class="muted" style="font-size:.82rem;margin-top:4px">Le sedute non spuntate restano come sono e l’assistente ne tiene conto per carichi e contenuti.</p></div>
     <div class="fgrid"><label class="f"><span>Stato del gruppo</span><select id="aiStato">${STATI_GRUPPO.map(x=>`<option value="${esc(x)}" ${(w.statoGruppo||'')===x?'selected':''}>${x||'Non indicato'}</option>`).join('')}</select></label>
       <label class="f"><span>Cosa voglio ottenere dal gruppo</span><input type="text" id="aiObG" data-keep="1" value="${esc(w.obiettivoGruppo||'')}" placeholder="Es. ritrovare fiducia, più competitività, concentrazione"></label></div>
+<label class="row" style="gap:6px;font-size:.88rem"><input type="checkbox" id="aiFree" ${a.free?'checked':''}> Idea libera: questa volta ignora le regole fisse e segui solo le mie indicazioni</label>
     <label class="f"><span>Indicazioni</span><textarea id="aiReq" data-keep="1" placeholder="Es. Sabato abbiamo preso 2 gol su ripartenze centrali. Lunedì siamo di solito in 14, mercoledì campo intero.">${esc(a.req||'')}</textarea></label>
     <div class="row"><button class="btn ai" data-act="aiGen">Progetta le sedute</button></div></div>`;
   if(a.state==='busy')return `<div class="aibox"><div class="row" style="justify-content:space-between"><h3>Sto progettando la settimana…</h3><button class="btn sm" data-act="aiStop">Interrompi</button></div><p class="muted" style="font-size:.85rem">Prima il piano della settimana, poi il dettaglio di ogni seduta con i disegni. Di solito 1-3 minuti.</p><ul id="aiSteps" style="margin:0;padding-left:18px;font-size:.9rem">${aiStepsHtml()}</ul></div>`;
@@ -319,6 +320,7 @@ function aiErrMsg(e){return e?.code==='not_granted'?'L’uso dell’assistente n
 async function aiGenerate(){
   const w=getWeek(S.weekStart);const t=team();const md=matchDayOf(w);
   const req=(document.getElementById('aiReq')?.value??S.ai?.req??'').trim();
+  const free=document.getElementById('aiFree')?document.getElementById('aiFree').checked:!!S.ai?.free;
   const gkBox=document.getElementById('aiGk');if(gkBox)w.gkCoach=[...gkBox.querySelectorAll('input:checked')].map(i=>Number(i.value));
   const pv=document.getElementById('aiPrev');if(pv){const o={};pv.querySelectorAll('input').forEach(i=>{const d=i.dataset.d;o[d]=o[d]||{};o[d][i.dataset.t]=Number(i.value)||0});w.previsti=o}
   const st=document.getElementById('aiStato');if(st){w.statoGruppo=st.value;w.obiettivoGruppo=(document.getElementById('aiObG')?.value||'').trim()}
@@ -337,8 +339,9 @@ Ogni seduta deve lavorare su almeno una di queste priorità (o sulle fasi con vo
 Ogni seduta da progettare deve preparare questa idea, con i mezzi del suo giorno: in MD-3 i principi dell'idea in spazi ampi e numeri vicini all'11c11; in MD-2 le stesse situazioni a velocità alta, volume basso e recuperi completi; nell'ultima seduta prima della gara titolari contro riserve sull'idea. Scrivi nel "principio" di ogni esercizio quale parte dell'idea allena e chiudi con una partita a tema sull'idea.`:'';
   const steps=[{label:'Piano della settimana',state:'run'},...giorni.map(d=>({label:'Dettaglio di '+DAYS_FULL[d].toLowerCase(),state:'wait'}))];
   const ac=new AbortController();
-  S.ai={week:w.id,state:'busy',req,steps,ac,days:giorni};render();
-  const ctx=`${METODO}
+  S.ai={week:w.id,state:'busy',req,steps,ac,days:giorni,free};render();
+  RULE_FREE=free;
+  const ctx=`${metodo()}
 
 ${teamContext()}
 ${prevWeekSummary(w.id)}
@@ -366,9 +369,10 @@ Rispondi SOLO con un oggetto JSON in italiano, conciso:
 {"obiettivo":"una frase","razionale":"2-3 frasi","note":"indicazioni pratiche su carico, disponibilità e organizzazione (niente lavori differenziati)","sessioni":[{"giorno":0,"titolo":"titolo breve","focus":"obiettivo della seduta","durata":${t.durata},"rpe":6,"condizionale":"lavoro fisico della seduta","esercizi":[{"nome":"","fase":"attivazione|iniziale|centrale|condizionale|finale","durata":10,"giocatori":"numeri esatti con totale","sistema":"nome del sistema o entrambi","idea":"1-2 frasi: cosa si fa e perché"}]}]}
 ${reqRule(req)}
 Una sessione per ciascun giorno indicato: attivazione + 2-3 esercizi (più un eventuale breve blocco condizionale) + la partita finale, durate che sommano a ${t.durata}'. Verifica i numeri di ogni esercizio.`;
+  RULE_FREE=false;
   let plan;
   try{plan=await S.sample.json(planPrompt,{modelTier:'complex',signal:ac.signal});if(!Array.isArray(plan?.sessioni)||!plan.sessioni.length)throw {code:'empty',message:'Il piano non contiene sedute.'};steps[0].state='ok';aiStepsUpd()}
-  catch(e){if(e&&(e.name==='AbortError'||e.code==='aborted')){S.ai={week:w.id,state:'form',req,days:giorni};render();return}S.ai={week:w.id,state:'error',req,days:giorni,msg:aiErrMsg(e)};render();return}
+  catch(e){if(e&&(e.name==='AbortError'||e.code==='aborted')){S.ai={week:w.id,state:'form',req,days:giorni,free};render();return}S.ai={week:w.id,state:'error',req,days:giorni,free,msg:aiErrMsg(e)};render();return}
   const pianoTxt=JSON.stringify({obiettivo:plan.obiettivo,sessioni:plan.sessioni.map(s=>({giorno:s.giorno,titolo:s.titolo,focus:s.focus,esercizi:(s.esercizi||[]).map(e=>e.nome+' ('+e.durata+"')")}))});
   const detail=async(s,idx)=>{const stp=steps[idx+1]||{};
     const p=`Sei il collaboratore tecnico di un allenatore di calcio italiano. Sviluppa in dettaglio la seduta di ${DAYS_FULL[s.giorno]||''} del microciclo, mantenendo esercizi, ordine, durate e numeri del piano (correggi solo eventuali errori nei numeri).
@@ -392,19 +396,21 @@ L'attivazione non ha schema; tutti gli altri esercizi sì.${reqRule(req)}`;
     const failed=[];
     const res={...plan,sessioni:plan.sessioni.map((s,i)=>{if(det[i])return {...s,esercizi:det[i]};failed.push(DAYS_FULL[s.giorno]);return {...s,esercizi:(s.esercizi||[]).map(e=>({...e,descrizione:e.idea||''}))}})};
     if(failed.length)res.note=(res.note?res.note+' ':'')+`Il dettaglio di ${failed.join(', ')} non è riuscito: ci sono gli esercizi del piano con disegni automatici, completali da Modifica o rigenera.`;
-    const r=normalizeWeekAI(res,md);if(!r.sessioni.length)throw {code:'empty',message:'La proposta non contiene sedute valide.'};
-    r.sessioni=r.sessioni.filter(x=>giorni.includes(x.giorno));S.ai={week:w.id,state:'done',req,result:r,days:giorni,kept:kept.length};
+    RULE_FREE=free;const r=normalizeWeekAI(res,md);RULE_FREE=false;if(!r.sessioni.length)throw {code:'empty',message:'La proposta non contiene sedute valide.'};
+    r.sessioni=r.sessioni.filter(x=>giorni.includes(x.giorno));S.ai={week:w.id,state:'done',req,result:r,days:giorni,kept:kept.length,free};
   }catch(e){
-    if(e&&(e.name==='AbortError'||e.code==='aborted'))S.ai={week:w.id,state:'form',req,days:giorni};
-    else S.ai={week:w.id,state:'error',req,days:giorni,msg:aiErrMsg(e)};
+    RULE_FREE=false;if(e&&(e.name==='AbortError'||e.code==='aborted'))S.ai={week:w.id,state:'form',req,days:giorni,free};
+    else S.ai={week:w.id,state:'error',req,days:giorni,free,msg:aiErrMsg(e)};
   }
   render();
 }
 function normalizeEx(e){const o={nome:String(e?.nome||'Esercizio'),fase:FASI.includes(e?.fase)?e.fase:'centrale',durata:Math.max(1,Math.round(Number(e?.durata)||10)),spazio:String(e?.spazio||''),giocatori:String(e?.giocatori||''),descrizione:String(e?.descrizione||''),principio:String(e?.principio||''),coaching:String(e?.coaching||''),organizzazione:String(e?.organizzazione||''),condizionale:String(e?.condizionale||''),vincoli:String(e?.vincoli||''),sistema:String(e?.sistema||'')};const sc=normalizeSchema(e?.schema);if(sc&&sc.el.length)o.schema=sc;if(Array.isArray(e?.step)){const st=e.step.slice(0,4).map(x=>{const r={titolo:String(x?.titolo||''),giocatori:String(x?.giocatori||''),descrizione:String(x?.descrizione||'')};const ss=normalizeSchema(x?.schema);if(ss&&ss.el.length)r.schema=ss;return r}).filter(x=>x.titolo||x.descrizione);if(st.length)o.step=st}return fixEx(o)}
-function ensureAtt(es,md){const a=Number(team().attivazione??10);if(!a)return es;const i=es.findIndex(e=>e.fase==='attivazione');const base=attivazione(md,a);if(i<0)return [base,...es];es[i]={...base,...es[i],schema:es[i].schema||base.schema};return es}
+function metodo(){return METODO_BASE+(RULE_FREE?'\nQUESTA VOLTA IL MISTER VUOLE UN’IDEA LIBERA: il metodo qui sopra è solo un riferimento; segui prima di tutto le sue indicazioni, anche se diverse dalla struttura abituale (attivazione, partita finale, stile dei giorni, sistema).':'')}
+function finalGame(es,min,total){return ruleOn('finale')?ensureFinalGame(es,min,total):es}
+function ensureAtt(es,md){if(!ruleOn('attivazione'))return es;const a=Number(team().attivazione??10);if(!a)return es;const i=es.findIndex(e=>e.fase==='attivazione');const base=attivazione(md,a);if(i<0)return [base,...es];es[i]={...base,...es[i],schema:es[i].schema||base.schema};return es}
 function normalizeWeekAI(res,md){
   const ss=Array.isArray(res?.sessioni)?res.sessioni:[];
-  const sessioni=ss.map(s=>{const g=Math.min(6,Math.max(0,Math.round(Number(s.giorno))));const lab=mdLabel(g,md)||String(s.md||'');const es=ensureFinalGame(ensureAtt((Array.isArray(s.esercizi)?s.esercizi:[]).map(normalizeEx),lab),team().partitaFinale??15,Number(s.durata)||team().durata);
+  const sessioni=ss.map(s=>{const g=Math.min(6,Math.max(0,Math.round(Number(s.giorno))));const lab=mdLabel(g,md)||String(s.md||'');const es=finalGame(ensureAtt((Array.isArray(s.esercizi)?s.esercizi:[]).map(normalizeEx),lab),team().partitaFinale??15,Number(s.durata)||team().durata);
     return {id:uid(),giorno:g,md:lab,tipo:(MD_INFO[lab]||{}).tipo||String(s.tipo||'Seduta libera'),titolo:String(s.titolo||(MD_INFO[lab]||{}).tipo||'Seduta'),focus:String(s.focus||''),durata:Math.round(Number(s.durata)||es.reduce((a,e)=>a+e.durata,0)||90),rpe:Math.min(10,Math.max(1,Number(s.rpe)||5)),esercizi:es,presenti:null,rpeReale:null,note:'',done:false}}).filter(s=>Number.isFinite(s.giorno)).sort((a,b)=>a.giorno-b.giorno);
   return {obiettivo:String(res?.obiettivo||''),razionale:String(res?.razionale||''),note:String(res?.note||''),sessioni};
 }
@@ -456,20 +462,30 @@ function fixEx(e){if(!e)return e;e.schemaG=e.giocatori||'';if(e.schema)e.schema=
 const isTeamGame=e=>e.fase!=='attivazione'&&e.fase!=='condizionale'&&(parseTeams(e).sizes.length>0||/partita|squadre|torneo|rondo|possesso/i.test((e.nome||'')+' '+(e.giocatori||'')));
 /* Disponibilità di ogni giocatore nel giorno della seduta: fuori, rientro (da infortunio, squalifica o assenza), acciaccato, ok */
 const OUT_STATI=['infortunato','squalificato','assente'];
+/* Regole fisse dell'assistente: si spengono in Impostazioni o volta per volta con "Idea libera" */
+let RULE_FREE=false;
+const REGOLE=[['sistema','Un solo sistema di gioco per tutta la settimana (quello della partita)'],['titolari','Titolari contro riserve nell’ultima seduta prima della gara'],['giorni','Stile che hai dato ai giorni (es. lunedì intenso, mercoledì cognitivo)'],['spazio','Spazio per giocatore in base al tipo di esercizio'],['evidenze','Principi di progettazione basati sulle ricerche'],['condizionale','Lavoro condizionale pianificato dall’assistente'],['attivazione','Attivazione iniziale in ogni seduta'],['finale','Partita finale in ogni seduta']];
+const ruleOn=k=>!RULE_FREE&&((team().regole||{})[k]!==false);
 function rosterOn(dateIso){return sortPlayers(S.players).map(p=>{const st=p.stato||'disponibile';let k='ok',why='';
-  if(OUT_STATI.includes(st)){if(p.rientro&&p.rientro<=dateIso){if(st==='infortunato'){k='rientro';why='rientro da infortunio previsto il '+fmtDay(parseIso(p.rientro))}}else{k='out';why=STATI[st][0].toLowerCase()+(p.rientro?' fino al '+fmtDay(parseIso(p.rientro)):'')}}
+  if(st==='assente'&&!p.rientro&&p.assenteDal&&dateIso>nextTraining(p.assenteDal)){}
+  else if(OUT_STATI.includes(st)){if(p.rientro&&p.rientro<=dateIso){if(st==='infortunato'){k='rientro';why='rientro da infortunio previsto il '+fmtDay(parseIso(p.rientro))}}else{k='out';why=STATI[st][0].toLowerCase()+(p.rientro?' fino al '+fmtDay(parseIso(p.rientro)):'')}}
   else if(p.rientratoIl&&!['assente','squalificato'].includes(p.rientratoDa)&&(parseIso(dateIso)-parseIso(p.rientratoIl))/864e5>=0&&(parseIso(dateIso)-parseIso(p.rientratoIl))/864e5<=14){k='rientro';why='rientrato il '+fmtDay(parseIso(p.rientratoIl))+(p.rientratoDa?' ('+p.rientratoDa+')':'')}
   if(st==='acciaccato'){k='limitato';why='acciaccato'}
   return {p,k,why:why+(p.note&&k!=='ok'?' · '+p.note:'')}}).concat((ED&&ED.s&&ED.s.ospiti||[]).map(g=>({p:g,k:'ospite',why:'ospite per questa seduta'})))}
-/* Il giorno del rientro il giocatore torna disponibile da solo */
+/* Primo allenamento dal giorno indicato (compreso): un'assenza senza data di rientro vale solo per quello */
+function nextTraining(d){const g=(team().giorni||[]).map(Number);if(!g.length)return d;for(let i=0;i<7;i++){const x=addDays(parseIso(d),i);if(g.includes((x.getDay()+6)%7))return iso(x)}return d}
+/* Stati che cambiano da soli: assente senza rientro torna disponibile dopo il suo allenamento; con data di rientro, quel giorno. Acciaccato mai da solo. */
 function autoReturns(){const today=todayIso();const back=[];
-  S.players.forEach(p=>{const st=p.stato||'disponibile';if(st==='disponibile'||!p.rientro||p.rientro>today)return;
+  S.players.forEach(p=>{const st=p.stato||'disponibile';
+    if(st==='assente'&&!p.rientro){if(!p.assenteDal){p.assenteDal=today;const {id,...rest}=p;put('giocatori',id,rest);return}
+      if(today>nextTraining(p.assenteDal)){p.stato='disponibile';delete p.assenteDal;back.push(p);const {id,...rest}=p;put('giocatori',id,{...rest,assenteDal:null})}return}
+    if(st==='disponibile'||st==='acciaccato'||!p.rientro||p.rientro>today)return;
     if(st==='infortunato'){p.rientratoIl=p.rientro;p.rientratoDa='infortunato'}
     p.stato='disponibile';p.rientro='';back.push(p);const {id,...rest}=p;put('giocatori',id,rest)});
   if(back.length){render();toast((back.length===1?'Torna disponibile: ':'Tornano disponibili: ')+back.map(p=>cogNome(p)).join(', '))}}
 setInterval(()=>{if(S.players&&S.players.length)autoReturns()},30*60*1000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.players&&S.players.length)autoReturns()});
-function markReturn(p,oldSt,newSt){if(oldSt==='infortunato'&&!OUT_STATI.includes(newSt||'disponibile')){p.rientratoIl=todayIso();p.rientratoDa=STATI[oldSt][0].toLowerCase()}else if(OUT_STATI.includes(newSt)){delete p.rientratoIl;delete p.rientratoDa}}
+function markReturn(p,oldSt,newSt){if(newSt==='assente'&&oldSt!=='assente')p.assenteDal=todayIso();else if(newSt!=='assente')delete p.assenteDal;if(oldSt==='infortunato'&&!OUT_STATI.includes(newSt||'disponibile')){p.rientratoIl=todayIso();p.rientratoDa=STATI[oldSt][0].toLowerCase()}else if(OUT_STATI.includes(newSt)){delete p.rientratoIl;delete p.rientratoDa}}
 /* Ospiti: giocatori aggregati solo per una seduta (es. un Under 17), salvati nella seduta e non nella rosa */
 const allPl=()=>S.players.concat(ED&&ED.s&&Array.isArray(ED.s.ospiti)?ED.s.ospiti:[]);
 const guestIds=s=>(s&&Array.isArray(s.ospiti)?s.ospiti:[]).map(g=>g.id);
@@ -576,7 +592,7 @@ Ha funzionato: ${f.ok||'-'}. Non ha funzionato: ${f.ko||'-'}. Gol: ${f.gol||'-'}
 Minuti: molto impiegati ${molti.join(', ')||'-'}; poco o niente ${poco.join(', ')||'-'}. Problemi fisici: ${Object.entries(f.fisico||{}).map(([id,v])=>nm(id)?nm(id)+' '+v:null).filter(Boolean).join(', ')||'nessuno'}.${f.note?' Note: '+f.note:''}`}
 async function fbAiGen(){const w=getWeek(S.weekStart);const f=fbCollect();saveWeek({...w,feedback:f,rpePartita:f.rpe===''?w.rpePartita:Number(f.rpe)});S.fbBusy=true;document.getElementById('fbAi').innerHTML=fbAiHtml(f);
   try{const r=await S.sample.json(`Sei il collaboratore tecnico di un allenatore di calcio italiano. La partita è finita: leggi il feedback del mister e indica cosa allenare la settimana prossima.
-${METODO}
+${metodo()}
 ${teamContext()}
 ${feedbackText({...w,feedback:f})}
 SETTIMANA APPENA CONCLUSA: obiettivo "${w.obiettivo||'-'}"; sedute: ${(w.sessioni||[]).map(s=>`${DAYS[s.giorno]} ${normMd(s.md)}: ${s.titolo}`).join(' | ')||'-'}.
@@ -666,8 +682,9 @@ Regole per rientri e acciaccati: il mister è solo in campo, quindi niente lavor
   const ac=new AbortController();ED.adapt={state:'busy',m,p:pp,req,ac,sel,mode};drawEditor();
   const strip=e=>{const {schema,svolto,salva,valutazione,libId,contato,...r}=e;return r};
   const others=(w.sessioni||[]).filter(x=>x!==w.sessioni[ED.idx]).map(x=>`${DAYS[x.giorno]} ${x.md}: ${x.titolo} (${(x.esercizi||[]).map(e=>e.nome).join(', ')})`).join(' | ');
+  RULE_FREE=libera;
   const prompt=`Sei il collaboratore tecnico di un allenatore di calcio italiano. La seduta di ${DAYS_FULL[d]} (${md}) era già pianificata, ma ${libera?'il mister vuole fare una seduta diversa':'i presenti cambiano'}: ${m} giocatori di movimento + ${pp} portieri. Rivedi SOLO questa seduta.
-${METODO}
+${metodo()}
 
 ${teamContext()}
 ALTRE SEDUTE DELLA SETTIMANA (non cambiano): ${others||'nessuna'}
@@ -689,10 +706,11 @@ ${libera?`Il mister vuole una SEDUTA DIVERSA da quella pianificata, per motivi s
 ${SCHEMA_SPEC}
 
 Rispondi SOLO con JSON: {"modifiche":"2-4 frasi su cosa cambia e perché","esercizi":[{"stato":"invariato","indice":0} oppure {"stato":"adattato|nuovo","nome":"","fase":"attivazione|iniziale|centrale|condizionale|finale","durata":15,"spazio":"","giocatori":"numeri esatti con totale","descrizione":"","principio":"","coaching":"","organizzazione":"","condizionale":"","sistema":"","step":[{"titolo":"","giocatori":"","descrizione":""}],"schema":{...}}]}`;
+  RULE_FREE=false;
   try{const r=await S.sample.json(prompt,{modelTier:'default',signal:ac.signal});
     const list=Array.isArray(r?.esercizi)?r.esercizi:[];if(!list.length)throw {code:'empty',message:'La proposta non contiene esercizi.'};
     let es=list.map(x=>{if(x&&x.stato==='invariato'&&s.esercizi[x.indice]){return {...JSON.parse(JSON.stringify(s.esercizi[x.indice])),_stato:'invariato'}}const e=normalizeEx(x);if(x&&s.esercizi[x.indice]&&x.stato==='adattato'&&!e.schema&&s.esercizi[x.indice].schema)e.schema=s.esercizi[x.indice].schema;e._stato=x&&x.stato==='nuovo'?'nuovo':'adattato';return e});
-    if(!libera)es=ensureFinalGame(ensureAtt(es,md),team().partitaFinale??15,s.durata);es.forEach(e=>{if(!e._stato)e._stato='nuovo'});
+    if(!libera)es=finalGame(ensureAtt(es,md),team().partitaFinale??15,s.durata);es.forEach(e=>{if(!e._stato)e._stato='nuovo'});
     if(ED&&ED.adapt)ED.adapt={state:'done',m,p:pp,req,sel,mode,result:{modifiche:String(r.modifiche||''),esercizi:es,titolo:libera?String(r.titolo||''):'',focus:libera?String(r.focus||''):'',rpe:libera&&Number(r.rpe)?Math.min(10,Math.max(1,Number(r.rpe))):null}};
   }catch(e){if(!ED)return;if(e&&(e.name==='AbortError'||e.code==='aborted'))ED.adapt={state:'form',m,p:pp,req,sel,mode};else ED.adapt={state:'error',m,p:pp,req,sel,mode,msg:aiErrMsg(e)}}
   if(ED&&document.getElementById('dlg').open)drawEditor();
@@ -738,7 +756,7 @@ function drawEditor(){
       <label class="f"><span>Obiettivo condizionale</span><input type="text" data-ex="${i}" data-k="condizionale" value="${esc(e.condizionale||'')}" placeholder="Es. intermittente 1' lavoro / 1' recupero, alta intensità"></label>
       <label class="f"><span>Organizzazione (campo, palloni, passaggio al successivo)</span><input type="text" data-ex="${i}" data-k="organizzazione" value="${esc(e.organizzazione||'')}"></label>
     </div></div>`).join('')||'<div class="empty">Nessun esercizio. Aggiungine uno dalla libreria o chiedilo all’assistente.</div>'}
-    ${S.sample?`<div class="aibox"><label class="f"><span>Chiedi un esercizio all'assistente (arriva già disegnato)</span><input type="text" id="exAiReq" placeholder="Es. 20' sulla copertura preventiva, siamo in 14 più un portiere"></label><div class="row"><button class="btn ai sm" data-act="exAi" ${ED.busy?'disabled':''}>${ED.busy?'Sto pensando…':'Proponi esercizio'}</button></div></div>`:''}`;
+    ${S.sample?`<div class="aibox"><label class="f"><span>Chiedi un esercizio all'assistente (arriva già disegnato)</span><input type="text" id="exAiReq" placeholder="Es. 20' sulla copertura preventiva, siamo in 14 più un portiere"></label><label class="row" style="gap:6px;font-size:.85rem"><input type="checkbox" id="exFree"> Idea libera: ignora le regole fisse</label><div class="row"><button class="btn ai sm" data-act="exAi" ${ED.busy?'disabled':''}>${ED.busy?'Sto pensando…':'Proponi esercizio'}</button></div></div>`:''}`;
   const pls=sortPlayers(S.players).concat(s.ospiti||[]);const pres=Array.isArray(s.presenti)?s.presenti:pls.filter(p=>(p.stato||'disponibile')==='disponibile').map(p=>p.id);
   const dopo=`<div class="fgrid"><label class="f"><span>RPE medio rilevato</span><input type="number" id="eRpeR" min="0" max="10" step="0.1" value="${s.rpeReale??''}" placeholder="0-10"></label>
       <label class="f"><span>Stato</span><select id="eDone"><option value="0" ${!s.done?'selected':''}>Da svolgere</option><option value="1" ${s.done?'selected':''}>Svolta</option></select></label></div>
@@ -778,13 +796,13 @@ function replPanel(i){const r=ED.repl;if(!r||r.i!==i)return '';const e=ED.s.eser
   if(r.state==='busy')return `<div class="aibox"><p>Cerco un’alternativa a “${esc(e.nome)}”…</p></div>`;
   if(r.state==='done'){const x=r.result;return `<div class="aibox"><div class="row" style="justify-content:space-between"><b>Proposta: ${esc(x.nome)}</b><span class="mono muted">${x.durata}′</span></div><div class="row" style="gap:12px;align-items:flex-start"><div style="width:180px">${thumb(x,'')}</div><div style="flex:1;min-width:0;font-size:.88rem"><div class="kv">${appBadge(x,ED.s.md)}<span>${esc(x.spazio)}</span><span>${esc(x.giocatori)}</span></div><p>${esc(x.descrizione)}</p>${x.principio?`<p><b>Principio:</b> ${esc(x.principio)}</p>`:''}</div></div><div class="row"><button class="btn pri sm" data-act="replUse" data-i="${i}">Usa questo</button><button class="btn sm" data-act="replAi" data-i="${i}">Altra proposta</button><button class="btn sm ghost" data-act="replClose">Annulla</button></div></div>`}
   return `<div class="aibox"><div class="row" style="justify-content:space-between"><b>Sostituisci “${esc(e.nome)}”</b><button class="btn sm ghost" data-act="replClose">Chiudi</button></div>
-    ${S.sample?`<label class="f"><span>Cosa vuoi cambiare (facoltativo)</span><input type="text" id="replReq" data-keep="1" value="${esc(r.req||'')}" placeholder="Es. più cognitivo, senza porte, con meno attese, sul 1-3-5-2"></label><div class="row"><button class="btn ai sm" data-act="replAi" data-i="${i}">Proponi un’alternativa</button></div>`:''}
+    ${S.sample?`<label class="f"><span>Cosa vuoi cambiare (facoltativo)</span><input type="text" id="replReq" data-keep="1" value="${esc(r.req||'')}" placeholder="Es. più cognitivo, senza porte, con meno attese, sul 1-3-5-2"></label><label class="row" style="gap:6px;font-size:.85rem"><input type="checkbox" id="replFree"> Idea libera: ignora le regole fisse</label><div class="row"><button class="btn ai sm" data-act="replAi" data-i="${i}">Proponi un’alternativa</button></div>`:''}
     <div class="row"><select id="replLib" style="width:auto;max-width:320px" aria-label="Esercizio dalla libreria"><option value="">Oppure dalla libreria…</option>${Object.keys(CATS).map(c=>`<optgroup label="${CATS[c]}">${allDr.filter(x=>x.cat===c).map(x=>`<option value="${x.id}">${esc(x.nome)}</option>`).join('')}</optgroup>`).join('')}</select><button class="btn sm" data-act="replLib" data-i="${i}">Sostituisci con questo</button></div></div>`}
-async function replAi(i){collectEditor();const s=ED.s;const e=s.esercizi[i];const w=getWeek(ED.wid);const req=(document.getElementById('replReq')?.value??ED.repl?.req??'').trim();
+async function replAi(i){collectEditor();const s=ED.s;const e=s.esercizi[i];const w=getWeek(ED.wid);const req=(document.getElementById('replReq')?.value??ED.repl?.req??'').trim();const free=!!document.getElementById('replFree')?.checked;
   ED.repl={i,state:'busy',req};drawEditor();
   const strip=x=>{const {schema,svolto,salva,valutazione,libId,contato,...r}=x;return r};
-  try{const r=await askExercise(`Sei il collaboratore tecnico di un allenatore di calcio italiano. Proponi UN esercizio ALTERNATIVO che sostituisca l'esercizio indicato nella seduta, nello stesso punto.
-${METODO}
+  try{RULE_FREE=free;const r=await askExercise(`Sei il collaboratore tecnico di un allenatore di calcio italiano. Proponi UN esercizio ALTERNATIVO che sostituisca l'esercizio indicato nella seduta, nello stesso punto.
+${metodo()}
 ${teamContext()}
 SEDUTA: ${DAYS_FULL[s.giorno]}, ${s.md||''}, ${s.titolo}. Obiettivo: ${s.focus}. Obiettivo settimana: ${w.obiettivo||'-'}.
 Esercizi della seduta: ${s.esercizi.map((x,k)=>(k===i?'>> DA SOSTITUIRE: ':'')+x.nome+' ('+x.durata+"')").join(' | ')}
@@ -799,15 +817,15 @@ ${appRule()}
 ${designRule()}
 ${SCHEMA_SPEC}
 Rispondi SOLO con JSON: {"nome":"","fase":"${e.fase}","durata":${e.durata},"spazio":"","giocatori":"numeri esatti con totale","descrizione":"","principio":"","coaching":"","organizzazione":"","condizionale":"","vincoli":"","sistema":"","step":[{"titolo":"","giocatori":"","descrizione":""}],"schema":{...}}${reqRule(req)}`,req);
-    if(r.v.length)toast('Controlla la proposta: '+r.v.join('; '));if(ED&&ED.repl)ED.repl={i,state:'done',req,result:r.e}}
-  catch(err){toast(err?.code==='rate_limited'?'Troppe richieste: riprova tra poco':'Proposta non riuscita');if(ED)ED.repl={i,state:'form',req}}
+    RULE_FREE=false;if(r.v.length)toast('Controlla la proposta: '+r.v.join('; '));if(ED&&ED.repl)ED.repl={i,state:'done',req,result:r.e}}
+  catch(err){RULE_FREE=false;toast(err?.code==='rate_limited'?'Troppe richieste: riprova tra poco':'Proposta non riuscita');if(ED)ED.repl={i,state:'form',req}}
   if(ED&&document.getElementById('dlg').open)drawEditor()}
 async function exAi(){
-  collectEditor();const req=(document.getElementById('exAiReq')?.value||'').trim();const s=ED.s;const w=getWeek(ED.wid);
+  collectEditor();const req=(document.getElementById('exAiReq')?.value||'').trim();const free=!!document.getElementById('exFree')?.checked;const s=ED.s;const w=getWeek(ED.wid);
   ED.busy=true;drawEditor();
   try{
-    const r=await askExercise(`Sei il collaboratore tecnico di un allenatore di calcio. Proponi UN esercizio per questa seduta.
-${METODO}
+    RULE_FREE=free;const r=await askExercise(`Sei il collaboratore tecnico di un allenatore di calcio. Proponi UN esercizio per questa seduta.
+${metodo()}
 ${teamContext()}
 SEDUTA: ${DAYS_FULL[s.giorno]}, ${mdLabel(s.giorno,matchDayOf(w))||''}, tipo ${s.tipo}, obiettivo: ${s.focus}. Obiettivo settimana: ${w.obiettivo||'-'}. Esercizi già presenti: ${s.esercizi.map(e=>e.nome).join(', ')||'nessuno'}.
 Richiesta del mister: ${req||'completa la seduta con l’esercizio più utile'}.
@@ -821,8 +839,8 @@ ${groupRule(w)}
 ${condRule()}
 ${appRule()}
 ${designRule()}${reqRule(req)}`,req);
-    s.esercizi.push(r.e);toast(r.v.length?'Esercizio aggiunto, ma controlla: '+r.v.join('; '):'Esercizio aggiunto, con disegno');
-  }catch(e){toast(e?.code==='rate_limited'?'Troppe richieste: riprova tra poco':'Proposta non riuscita')}
+    RULE_FREE=false;s.esercizi.push(r.e);toast(r.v.length?'Esercizio aggiunto, ma controlla: '+r.v.join('; '):'Esercizio aggiunto, con disegno');
+  }catch(e){RULE_FREE=false;toast(e?.code==='rate_limited'?'Troppe richieste: riprova tra poco':'Proposta non riuscita')}
   ED.busy=false;if(document.getElementById('dlg').open&&ED)drawEditor();
 }
 
@@ -980,7 +998,7 @@ function plDialog(id){
     <div class="fgrid"><label class="f"><span>Reparto</span><select id="pRuolo">${Object.entries(RUOLI_OPT).map(([k,l])=>`<option value="${k}" ${p.ruolo===k?'selected':''}>${l}</option>`).join('')}</select></label><label class="f"><span>Ruolo principale</span>${posSelect('pPos1',p.pos1||'','—')}</label><label class="f"><span>Ruolo secondario</span>${posSelect('pPos2',p.pos2||'','Nessuno')}</label><label class="f"><span>Piede</span><select id="pPiede">${['','destro','sinistro','ambidestro'].map(x=>`<option ${p.piede===x?'selected':''}>${x}</option>`).join('')}</select></label></div>
     <label class="f"><span>Sotto-ruolo e caratteristiche</span><input type="text" id="pSub" value="${esc(p.sottoruolo||'')}" placeholder="Es. braccetto sinistro in impostazione, mezzala d’inserimento, punta di riferimento"></label>
     ${p.rientratoIl?`<div class="row" style="justify-content:space-between;background:var(--accent-soft);border-radius:var(--r);padding:8px 10px"><span style="font-size:.9rem">Segnato come rientro da infortunio dal ${fmtDay(parseIso(p.rientratoIl))}: nelle sedute lo inserisco con un ruolo protetto.</span><button class="btn sm" data-act="plNoReturn" data-id="${p.id}">Non è un rientro</button></div>`:''}
-    <div class="fgrid"><label class="f"><span>Stato</span><select id="pStato">${Object.entries(STATI).map(([k,[l]])=>`<option value="${k}" ${(p.stato||'disponibile')===k?'selected':''}>${l}</option>`).join('')}</select></label><label class="f"><span>Rientro previsto</span><input type="date" id="pRientro" value="${esc(p.rientro)}"></label></div>
+    <div class="fgrid"><label class="f"><span>Stato <span class="muted" style="font-weight:400" title="Assente: solo per il prossimo allenamento, o fino alla data di rientro se la indichi. Acciaccato: resta tale finché non lo aggiorni.">ⓘ</span></span><select id="pStato">${Object.entries(STATI).map(([k,[l]])=>`<option value="${k}" ${(p.stato||'disponibile')===k?'selected':''}>${l}</option>`).join('')}</select></label><label class="f"><span>Rientro previsto</span><input type="date" id="pRientro" value="${esc(p.rientro)}"></label></div>
     <label class="f"><span>Note</span><textarea id="pNote">${esc(p.note)}</textarea></label>
   </div><footer><div>${id?`<button class="btn danger" data-act="plDel" data-id="${id}" data-confirm="Conferma eliminazione">Elimina</button>`:''}</div><div class="row"><button class="btn" data-act="dlgClose">Annulla</button><button class="btn pri" data-act="plSave" data-id="${id||''}">Salva</button></div></footer></div>`;
   document.getElementById('dlg').showModal();
@@ -1053,6 +1071,7 @@ function vImpostazioni(){
       <label class="f"><span>Attivazione iniziale (min)</span><input type="number" id="tAtt" min="0" max="25" value="${esc(t.attivazione??10)}"></label>
       <label class="f"><span>Preparatore portieri</span><select id="tGk">${[['sempre','Sempre presente'],['a volte','A volte'],['mai','Mai']].map(([v,l])=>`<option value="${v}" ${(t.prepPortieri||'a volte')===v?'selected':''}>${l}</option>`).join('')}</select></label>
       <label class="f"><span>Preparatore atletico</span><select id="tPA"><option value="no" ${t.prepAtletico!=='si'?'selected':''}>No: il condizionale lo pianifica l’assistente</option><option value="si" ${t.prepAtletico==='si'?'selected':''}>Sì</option></select></label></div>
+    <div class="f"><span class="lbl">Regole fisse dell’assistente</span><p class="muted" style="font-size:.85rem;margin-top:2px">Togli la spunta a quelle che non vuoi sempre. Volta per volta puoi anche scegliere «Idea libera» quando chiedi una proposta.</p><div class="checks" id="tRegole" style="margin-top:6px">${REGOLE.map(([k,l])=>`<label><input type="checkbox" value="${k}" ${(t.regole||{})[k]!==false?'checked':''}> ${l}</label>`).join('')}</div></div>
     <div class="fgrid"><label class="f"><span>Allenatore di riferimento (facoltativo)</span><input type="text" id="tRif" value="${esc(t.allenatoreRif||'')}" placeholder="Es. Roberto De Zerbi"></label>
       <label class="f"><span>Suoi principi che vuoi seguire</span><input type="text" id="tRifP" value="${esc(t.principiRif||'')}" placeholder="Es. costruzione dal basso per attirare la pressione, uomo libero dietro la linea, riaggressione in 5 secondi"></label></div>
     <div class="f"><span class="lbl">Di solito il preparatore dei portieri c’è</span><div class="checks" id="tGkDays" style="margin-top:6px">${(t.giorni||[]).map(d=>`<label><input type="checkbox" value="${d}" ${(t.gkDays||[]).map(Number).includes(d)?'checked':''}>${DAYS_FULL[d]}</label>`).join('')||'<span class="muted">Imposta prima i giorni di allenamento</span>'}</div><span class="muted" style="font-size:.82rem">Ogni settimana puoi cambiarlo quando progetti con l’AI. Nei giorni senza preparatore i portieri sono coinvolti in tutti gli esercizi.</span></div>
@@ -1115,7 +1134,7 @@ ${appRule()}
 ${designRule()}
 ${dayRule(team().giorni||[])}
 ${groupRule(cw)}
-${METODO}
+${metodo()}
 
 ${teamContext()}
 SETTIMANA IN CORSO: obiettivo "${cw.obiettivo||'-'}", sistema per la partita ${cw.sistemaPartita||'da decidere'}, sistema dell'avversario ${cw.sistemaAvversario||'non indicato'}, idea tattica: ${cw.ideaPartita||'non ancora definita'}, formazione: ${cw.formazione&&cw.formazione.slots?cw.formazione.slots.map(id=>{const p=S.players.find(x=>x.id===id);return p?cognome(p):''}).filter(Boolean).join(', '):'non definita'}, partita ${matchDayOf(cw)!=null&&matchDayOf(cw)!==''?DAYS_FULL[matchDayOf(cw)]:'nessuna'}${cw.avversario?' vs '+cw.avversario:''}; sedute: ${(cw.sessioni||[]).map(s=>`${DAYS[s.giorno]} ${s.md} ${s.titolo} (${s.durata}' RPE ${s.rpe}${s.done?', svolta, RPE reale '+(s.rpeReale??'-')+', presenti '+(s.presenti?s.presenti.length:'-'):''}): ${(s.esercizi||[]).map(e=>e.nome).join(', ')}`).join(' | ')||'nessuna'}
@@ -1225,7 +1244,7 @@ const ACT={
   dDel:t=>{S.drills=S.drills.filter(d=>d.id!==t.dataset.id);del('esercizi',t.dataset.id);closeDlg();render()},
   dAi:async()=>{const req=(document.getElementById('dAiReq')?.value||'').trim();if(!req)return toast('Descrivi l’esercizio che ti serve');S.dBusy=true;render();
     try{const r=await S.sample.json(`Sei il collaboratore tecnico di un allenatore di calcio. Crea UN esercizio di allenamento.
-${METODO}
+${metodo()}
 ${teamContext()}
 Richiesta: ${req}
 ${SCHEMA_SPEC}
@@ -1237,7 +1256,7 @@ ${staffRule(null)}`,{modelTier:'default'});
     S.dBusy=false;render()},
   teamSave:()=>{const g=id=>document.getElementById(id).value;const giorni=[...document.querySelectorAll('#tGiorni input[type=checkbox]:checked')].map(i=>Number(i.value));
     const orari={};giorni.forEach(d=>{const v=g('tOra'+d).trim();if(v)orari[d]=v});
-    const t={...team(),orari,nome:g('tNome')||'La mia squadra',categoria:g('tCat'),livello:g('tLiv'),sistemi:[0,1,2].map(i=>({nome:g('sis_n_'+i).trim(),uso:g('sis_u_'+i).trim(),stato:g('sis_s_'+i)})).filter(x=>x.nome),sistema:[0,1,2].map(i=>g('sis_n_'+i).trim()).filter(Boolean).join(' / '),matchDay:Number(g('tMD')),durata:Number(g('tDur'))||90,attivazione:Math.max(0,Number(g('tAtt'))||0),allenatoreRif:(g('tRif')||'').trim(),principiRif:(g('tRifP')||'').trim(),partitaFinale:Math.max(0,Number(g('tFin'))||0),app:Object.fromEntries(APP_TYPES.map(([k])=>[k,[Number(g('app_'+k+'_0'))||APP_DEF[k][0],Number(g('app_'+k+'_1'))||APP_DEF[k][1]]])),prepPortieri:g('tGk'),prepAtletico:g('tPA'),gkDays:[...document.querySelectorAll('#tGkDays input:checked')].map(i=>Number(i.value)),stileGiorni:Object.fromEntries((team().giorni||[]).map(d=>[d,(document.getElementById('sg_'+d)?.value||'').trim()]).filter(x=>x[1])),giorni,sedute:giorni.length,campo:g('tCampo'),note:g('tNote'),
+    const t={...team(),orari,nome:g('tNome')||'La mia squadra',categoria:g('tCat'),livello:g('tLiv'),sistemi:[0,1,2].map(i=>({nome:g('sis_n_'+i).trim(),uso:g('sis_u_'+i).trim(),stato:g('sis_s_'+i)})).filter(x=>x.nome),sistema:[0,1,2].map(i=>g('sis_n_'+i).trim()).filter(Boolean).join(' / '),matchDay:Number(g('tMD')),durata:Number(g('tDur'))||90,attivazione:Math.max(0,Number(g('tAtt'))||0),allenatoreRif:(g('tRif')||'').trim(),regole:Object.fromEntries([...document.querySelectorAll('#tRegole input')].map(i=>[i.value,i.checked])),principiRif:(g('tRifP')||'').trim(),partitaFinale:Math.max(0,Number(g('tFin'))||0),app:Object.fromEntries(APP_TYPES.map(([k])=>[k,[Number(g('app_'+k+'_0'))||APP_DEF[k][0],Number(g('app_'+k+'_1'))||APP_DEF[k][1]]])),prepPortieri:g('tGk'),prepAtletico:g('tPA'),gkDays:[...document.querySelectorAll('#tGkDays input:checked')].map(i=>Number(i.value)),stileGiorni:Object.fromEntries((team().giorni||[]).map(d=>[d,(document.getElementById('sg_'+d)?.value||'').trim()]).filter(x=>x[1])),giorni,sedute:giorni.length,campo:g('tCampo'),note:g('tNote'),
       principi:Object.fromEntries(FASI_GIOCO.map(([k])=>[k,g('mo_'+k)])),realta:Object.fromEntries(FASI_GIOCO.map(([k])=>[k,g('re_'+k)])),priorita:Object.fromEntries(FASI_GIOCO.map(([k])=>[k,g('pr_'+k)]))};
     S.team=t;put('squadra','info',t);toast('Impostazioni salvate');render()},
   realtaAi:async()=>{const played=S.matches.filter(m=>m.analisi&&(m.giocata||m.data<todayIso())).sort((a,b)=>a.data<b.data?-1:1);
