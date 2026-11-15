@@ -838,6 +838,11 @@ async function aiGenerate(){
   if(!giorni.length){toast('Scegli almeno una seduta da progettare');return}
   const kept=(w.sessioni||[]).filter(s=>!giorni.includes(s.giorno));
   const keptTxt=kept.length?`SEDUTE CHE RESTANO COME SONO (già svolte o già decise: non riprogettarle, ma tienine conto per carico, varietà e progressione): ${kept.map(s=>`${DAYS_FULL[s.giorno]} ${normMd(s.md)||''}${s.done?' (svolta'+(s.rpeReale?', RPE '+s.rpeReale:'')+')':''}: ${s.titolo} – ${(s.esercizi||[]).map(e=>e.nome).join(', ')}`).join(' | ')}`:'';
+  const pw=S.weeks[iso(addDays(parseIso(w.id),-7))];const fbA=pw&&pw.feedback&&pw.feedback.ai;
+  const fbTxt=pw&&pw.feedback?`LA SETTIMANA PARTE DAL FEEDBACK DELLA PARTITA PRECEDENTE (è il punto di partenza della progettazione):
+${feedbackText(pw)}${fbA?`
+Priorità emerse: ${(fbA.priorita||[]).map((x,i)=>(i+1)+') '+x).join('; ')}.${fbA.carico?' Carico dei primi giorni: '+fbA.carico+'.':''}`:''}
+Ogni seduta deve lavorare su almeno una di queste priorità (o sulle fasi con voto più basso), con i mezzi del suo giorno MD; chi ha giocato molto o ha problemi fisici va gestito nei primi giorni senza lavori differenziati. Nel razionale spiega come la settimana risponde alla partita.`:'';
   const ideaTxt=w.ideaPartita?`IDEA DELLA PARTITA DI ${md!=null&&md!==''?DAYS_FULL[md].toUpperCase():'QUESTA SETTIMANA'} (spiegata dal mister, è il filo conduttore): ${w.ideaPartita}
 Ogni seduta da progettare deve preparare questa idea, con i mezzi del suo giorno: in MD-3 i principi dell'idea in spazi ampi e numeri vicini all'11c11; in MD-2 le stesse situazioni a velocità alta, volume basso e recuperi completi; nell'ultima seduta prima della gara titolari contro riserve sull'idea. Scrivi nel "principio" di ogni esercizio quale parte dell'idea allena e chiudi con una partita a tema sull'idea.`:'';
   const steps=[{label:'Piano della settimana',state:'run'},...giorni.map(d=>({label:'Dettaglio di '+DAYS_FULL[d].toLowerCase(),state:'wait'}))];
@@ -851,6 +856,7 @@ ${prevWeekSummary(w.id)}
 CALENDARIO: partita ${md==null||md===''?'assente (settimana di sosta)':DAYS_FULL[md]+(w.avversario?' contro '+w.avversario:'')}.
 Giorni di allenamento (0=lunedì … 6=domenica, etichetta MD già calcolata): ${giorni.map(d=>d+'='+DAYS_FULL[d]+' '+(mdLabel(d,md)||'')+(ora(d)?' ore '+ora(d):'')).join(', ')}.
 Obiettivo indicato dal mister: ${w.obiettivo||'non indicato, proponilo tu'}.
+${fbTxt}
 ${ideaTxt}
 ${keptTxt}
 Indicazioni del mister: ${req||'nessuna'}.
@@ -1037,7 +1043,7 @@ const FB_FIS=[['','Ok'],['acciaccato','Acciaccato'],['infortunato','Infortunato'
 function matchOfWeek(w){const md=matchDayOf(w);if(md==null||md==='')return null;const d=iso(addDays(parseIso(w.id),Number(md))),end=iso(addDays(parseIso(w.id),6));return S.matches.find(m=>m.data===d)||S.matches.find(m=>m.data>=w.id&&m.data<=end&&m.competizione!=='Amichevole')||null}
 function feedbackStrip(w){const f=w.feedback;const md=matchDayOf(w);if(md==null||md==='')return '';if(!f&&iso(addDays(parseIso(w.id),Number(md)))>todayIso())return '';
   if(!f)return `<div class="row" style="margin-top:8px;justify-content:space-between;flex-wrap:wrap;gap:8px"><span class="muted" style="font-size:.88rem">Finita la partita, registra com’è andata: servirà a preparare la settimana dopo.</span><button class="btn sm" data-act="fbOpen">Com’è andata?</button></div>`;
-  return `<div class="callout" style="margin-top:8px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><span><b>Feedback partita</b>${f.golFatti!==''&&f.golFatti!=null?` · ${esc(f.golFatti)}-${esc(f.golSubiti)}`:''}${f.idea?` · idea tattica: ${esc(f.idea)}`:''}</span><button class="btn sm" data-act="fbOpen">Modifica</button></div>${f.ai&&f.ai.priorita?`<p style="font-size:.88rem;margin-top:6px"><b>Priorità per la prossima settimana:</b> ${f.ai.priorita.map(esc).join(' · ')}</p>`:''}</div>`}
+  return `<div class="callout" style="margin-top:8px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><span><b>Feedback partita</b>${f.golFatti!==''&&f.golFatti!=null?` · ${esc(f.golFatti)}-${esc(f.golSubiti)}`:''}${f.idea?` · idea tattica: ${esc(f.idea)}`:''}</span><span class="row" style="gap:8px">${S.sample?`<button class="btn ai sm" data-act="fbPlan">Progetta la prossima settimana</button>`:''}<button class="btn sm" data-act="fbOpen">Modifica</button></span></div>${f.ai&&f.ai.priorita?`<p style="font-size:.88rem;margin-top:6px"><b>Priorità per la prossima settimana:</b> ${f.ai.priorita.map(esc).join(' · ')}</p>`:''}</div>`}
 function fbDialog(){const w=getWeek(S.weekStart);const f=w.feedback||{};const m=matchOfWeek(w);const t=team();
   const conv=sortPlayers(S.players);const mins=f.minuti||{};const fis=f.fisico||{};
   const gf=f.golFatti??(m?m.golFatti:'')??'',gs=f.golSubiti??(m?m.golSubiti:'')??'';
@@ -1062,9 +1068,9 @@ function fbDialog(){const w=getWeek(S.weekStart);const f=w.feedback||{};const m=
   const d=document.getElementById('dlg');if(!d.open)d.showModal()}
 function fbAiHtml(f){const a=f.ai;const nx=iso(addDays(parseIso(S.weekStart),7));
   if(S.fbBusy)return `<p>Sto leggendo la partita e preparo le priorità della prossima settimana…</p>`;
-  if(!a)return `<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><span style="font-size:.9rem">Dal feedback ricavo cosa allenare la settimana prossima.</span><button class="btn ai sm" data-act="fbAi">Proponi le priorità</button></div>`;
+  if(!a)return `<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><span style="font-size:.9rem">Dal feedback ricavo cosa allenare e progetto la settimana prossima.</span><div class="row" style="gap:8px"><button class="btn sm" data-act="fbAi">Solo le priorità</button><button class="btn ai sm" data-act="fbPlan">Progetta la prossima settimana</button></div></div>`;
   return `<h3>Per la settimana del ${fmtDay(parseIso(nx))}</h3>${a.sintesi?`<p style="font-size:.9rem">${esc(a.sintesi)}</p>`:''}<ol style="margin:0;padding-left:20px">${(a.priorita||[]).map(x=>`<li>${esc(x)}</li>`).join('')}</ol>${a.obiettivo?`<p style="font-size:.9rem"><b>Obiettivo proposto:</b> ${esc(a.obiettivo)}</p>`:''}${a.carico?`<p style="font-size:.9rem"><b>Carico:</b> ${esc(a.carico)}</p>`:''}
-    <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn pri sm" data-act="fbUse">Usa per la prossima settimana</button><button class="btn sm" data-act="fbAi">Rigenera</button></div>`}
+    <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ai sm" data-act="fbPlan">Progetta la prossima settimana</button><button class="btn sm" data-act="fbUse">Solo imposta obiettivo e indicazioni</button><button class="btn sm" data-act="fbAi">Rigenera</button></div>`}
 function fbCollect(){const g=id=>document.getElementById(id);const w=getWeek(S.weekStart);const old=w.feedback||{};
   const fasi={};FASI_GIOCO.forEach(([k])=>{const v=document.querySelector(`[data-fbv="${k}"]`)?.value||'';const n=(document.querySelector(`[data-fbn="${k}"]`)?.value||'').trim();if(v||n)fasi[k]={voto:v?Number(v):null,nota:n}});
   const minuti={},fisico={};document.querySelectorAll('[data-fbm]').forEach(el=>{if(el.value!=='')minuti[el.dataset.fbm]=Number(el.value)});document.querySelectorAll('[data-fbf]').forEach(el=>{if(el.value)fisico[el.dataset.fbf]=el.value});
@@ -1678,6 +1684,12 @@ const ACT={
     Object.entries(f.fisico).forEach(([id,st])=>{const p=S.players.find(x=>x.id===id);if(p&&p.stato!==st&&!(p.stato==='infortunato'&&st==='acciaccato')){markReturn(p,p.stato,st);p.stato=st;const {id:_,...rest}=p;put('giocatori',id,rest)}});
     const m=matchOfWeek(w);if(m&&f.golFatti!==''){const {id,...rest}=m;const nm={...rest,golFatti:f.golFatti,golSubiti:f.golSubiti,giocata:true,analisi:[f.ok&&'Bene: '+f.ok,f.ko&&'Male: '+f.ko,f.gol&&'Gol: '+f.gol].filter(Boolean).join(' · ')||m.analisi||''};Object.assign(m,nm);put('partite',id,nm)}
     closeDlg();toast('Feedback salvato: lo uso per preparare la prossima settimana');render()},
+  fbPlan:async()=>{let w=getWeek(S.weekStart);if(!S.sample)return toast('L’assistente non è disponibile qui');
+    if(document.getElementById('fbGf')){const f=fbCollect();saveWeek({...w,feedback:f,rpePartita:f.rpe===''?w.rpePartita:Number(f.rpe)});w=getWeek(S.weekStart)}
+    if(!(w.feedback&&w.feedback.ai)){await fbAiGen();w=getWeek(S.weekStart)}
+    const a=(w.feedback||{}).ai;if(!a)return;const nid=iso(addDays(parseIso(S.weekStart),7));const n=getWeek(nid);const req=a.indicazioni+(a.carico?'\nCarico: '+a.carico:'');
+    saveWeek({...n,obiettivo:n.obiettivo||a.obiettivo,statoGruppo:(w.feedback||{}).statoGruppo||n.statoGruppo,indicazioni:req});
+    closeDlg();S.weekStart=nid;S.ai={week:nid,state:'form',req};render();setTimeout(()=>aiGenerate(),50)},
   fbUse:()=>{const w=getWeek(S.weekStart);const a=(w.feedback||{}).ai;if(!a)return;const nid=iso(addDays(parseIso(S.weekStart),7));const n=getWeek(nid);
     saveWeek({...n,obiettivo:n.obiettivo||a.obiettivo,statoGruppo:(w.feedback||{}).statoGruppo||n.statoGruppo,indicazioni:a.indicazioni+(a.carico?'\nCarico: '+a.carico:'')});closeDlg();S.weekStart=nid;S.ai={week:nid,state:'form',req:a.indicazioni+(a.carico?'\nCarico: '+a.carico:'')};render();toast('Prossima settimana impostata: controlla e genera')},
   formAuto:()=>{const sys=document.getElementById('fSys').value;const res=proposeFormation(sys);document.querySelectorAll('#fSlots [data-slot]').forEach(el=>{el.value=res[Number(el.dataset.slot)]||''})},
