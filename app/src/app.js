@@ -1,6 +1,6 @@
 
 /* ===== Stato e persistenza ===== */
-const S={classifica:null,team:null,players:[],weeks:{},matches:[],drills:[],route:'settimana',sub:'rosa',weekStart:iso(mondayOf(new Date())),db:null,sample:null,dbState:'loading',libCat:'tutti',rosaFilter:'tutti',chat:[],chatBusy:false,chatOpen:false,ai:null};
+const S={classifica:null,team:null,players:[],weeks:{},matches:[],drills:[],route:'settimana',sub:'rosa',weekStart:iso(mondayOf(new Date())),db:null,sample:null,dbState:'loading',libCat:'tutti',rosaFilter:'tutti',chat:[],chats:{},chatId:null,chatHist:false,chatBusy:false,chatOpen:false,ai:null};
 const DEFAULT_TEAM={nome:'La mia squadra',categoria:'',livello:'Dilettanti',sistema:'',matchDay:6,sedute:3,giorni:[1,3,4],orari:{},durata:90,attivazione:10,campo:'',principi:{offensiva:'',difensiva:'',transPos:'',transNeg:'',inattive:''},note:''};
 const team=()=>S.team||DEFAULT_TEAM;
 const queue={};
@@ -30,6 +30,7 @@ async function boot(){
     db.collection('giocatori').onSnapshot(q=>{S.players=q.docs.map(d=>({...d.data(),id:d.id}));if(!q.metadata.fromCache){done('giocatori');autoReturns()}render()},err);
     db.collection('settimane').onSnapshot(q=>{const w={};q.docs.forEach(d=>{const x={...d.data(),id:d.id};if(Array.isArray(x.sessioni))x.sessioni=x.sessioni.map(o=>o&&o.md?{...o,md:normMd(o.md),titolo:String(o.titolo||'').replace(/MD-[456]\b/g,normMd),esercizi:Array.isArray(o.esercizi)?o.esercizi.map(e=>e&&e.schemaG==null?fixEx(JSON.parse(JSON.stringify(e))):e):o.esercizi}:o);w[d.id]=x});S.weeks=w;if(!q.metadata.fromCache)done('settimane');render()},err);
     db.collection('partite').onSnapshot(q=>{S.matches=q.docs.map(d=>({...d.data(),id:d.id}));if(!q.metadata.fromCache)done('partite');render()},err);
+    db.collection('chat').onSnapshot(q=>{const c={};q.docs.forEach(d=>c[d.id]={...d.data(),id:d.id});S.chats=c;if(S.chatOpen&&!S.chatBusy)renderChat()},()=>{});
     db.collection('esercizi').onSnapshot(q=>{S.drills=q.docs.map(d=>({...d.data(),id:d.id}));if(!q.metadata.fromCache)done('esercizi');render()},err);
   }catch(e){S.dbState='off';render()}
 }
@@ -1112,10 +1113,23 @@ function mdLite(t){const lines=esc(t).split('\n');let out='',inList=false;
     if(h)out+='<p><b>'+h[1]+'</b></p>';else if(l.trim())out+='<p>'+l+'</p>'}
   if(inList)out+='</ul>';return out}
 const SUGG=['Chi ha meno presenze e come lo gestisco?','Come preparo la partita di sabato contro il prossimo avversario?','Proponi un esercizio sulla transizione negativa','Il carico delle ultime settimane è equilibrato?','Prepara il discorso pre-partita in 5 punti'];
+/* Storico delle conversazioni con l'assistente: ogni conversazione è salvata nel database */
+const CHAT_MAX=40,CHAT_MSG_MAX=60;
+function saveChat(){if(!S.chat.length||!S.chat.some(m=>m.role==='assistant'&&m.content))return;const now=new Date().toISOString();
+  if(!S.chatId)S.chatId=uid();const old=S.chats[S.chatId]||{};const first=(S.chat.find(m=>m.role==='user')||{}).content||'Conversazione';
+  const doc={titolo:old.titolo||first.replace(/\s+/g,' ').slice(0,70),creata:old.creata||now,aggiornata:now,messaggi:S.chat.slice(-CHAT_MSG_MAX).map(m=>({role:m.role,content:String(m.content||'')}))};
+  S.chats[S.chatId]={...doc,id:S.chatId};put('chat',S.chatId,doc);
+  const all=Object.values(S.chats).sort((a,b)=>a.aggiornata<b.aggiornata?1:-1);all.slice(CHAT_MAX).forEach(c=>{delete S.chats[c.id];del('chat',c.id)})}
+function chatHistHtml(){const all=Object.values(S.chats).sort((a,b)=>a.aggiornata<b.aggiornata?1:-1);
+  if(!all.length)return '<p class="muted" style="font-size:.9rem">Nessuna conversazione salvata. Le conversazioni con l’assistente vengono salvate qui da sole.</p>';
+  const when=t=>{const d=new Date(t);return fmtDay(d)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
+  return `<div class="stack" style="gap:6px">${all.map(c=>`<div class="row" style="justify-content:space-between;gap:8px;border-top:1px solid var(--line);padding-top:6px${c.id===S.chatId?';font-weight:600':''}"><button class="btn ghost" style="flex:1;min-width:0;text-align:left;justify-content:flex-start;white-space:normal" data-act="chatLoad" data-id="${c.id}"><span>${esc(c.titolo)}<br><span class="muted" style="font-size:.8rem;font-weight:400">${when(c.aggiornata)} · ${(c.messaggi||[]).length} messaggi</span></span></button><button class="btn sm ghost" data-act="chatDel" data-id="${c.id}" aria-label="Elimina conversazione">✕</button></div>`).join('')}</div>`}
 function renderChat(){
   const dr=document.getElementById('drawer');dr.hidden=!S.chatOpen;document.getElementById('fab').hidden=S.chatOpen;
   if(!S.chatOpen)return;
   const b=document.getElementById('chatBody');
+  const hb=document.getElementById('chatHistBtn');if(hb){hb.hidden=!Object.keys(S.chats).length&&!S.chatHist;hb.textContent=S.chatHist?'Torna alla chat':'Storico'}
+  if(S.chatHist){b.innerHTML=`<h3 style="margin-bottom:8px">Conversazioni salvate</h3>${chatHistHtml()}`;document.getElementById('chatClear').hidden=false;return}
   b.innerHTML=(!S.sample?'<div class="banner">L’assistente non è disponibile in questa vista. Apri la pagina su claude.ai con il tuo account.</div>':'')+
     (S.chat.length?S.chat.map(m=>`<div class="msg ${m.role==='user'?'u':'a'}">${m.role==='user'?esc(m.content).replace(/\n/g,'<br>'):mdLite(m.content||'…')}</div>`).join(''):`<p class="muted" style="font-size:.9rem">Conosce rosa, risultati, classifica, carichi e la settimana in corso.</p><div class="chips">${SUGG.map((s,i)=>`<button class="chip" data-act="sugg" data-i="${i}">${esc(s)}</button>`).join('')}</div>`);
   const lastA=[...b.querySelectorAll('.msg.a')].pop();if(lastA&&!S.chatBusy&&S.chat.length&&S.chat[S.chat.length-1].content){const bt=document.createElement('div');bt.className='row';bt.style.marginTop='-4px';bt.innerHTML='<button class="btn sm" data-act="saveIdea">Salva come idea tattica della partita</button>';lastA.after(bt)}
@@ -1145,8 +1159,8 @@ Oggi è ${DAYS_FULL[(new Date().getDay()+6)%7]} ${todayIso()}.`;
   const msgs=S.chat.slice(0,-1).map((m,i)=>({role:m.role,content:i===0?ctx+'\n\nDOMANDA DEL MISTER: '+m.content:m.content}));
   const target=S.chat[S.chat.length-1];
   try{const r=await S.sample(msgs,{modelTier:'default',cache:false,onText:({text})=>{target.content=text;const els=document.querySelectorAll('#chatBody .msg.a');const el=els[els.length-1];if(el)el.innerHTML=mdLite(text);const b=document.getElementById('chatBody');if(b)b.scrollTop=b.scrollHeight}});target.content=r.text}
-  catch(e){target.content=e?.code==='rate_limited'?'Troppe richieste ravvicinate: riprova tra un minuto.':e?.code==='not_granted'?'L’uso dell’assistente non è stato autorizzato per questa pagina.':(e?.text||'Non sono riuscito a rispondere. Riprova.')}
-  S.chatBusy=false;S.chatScroll=true;renderChat();
+  catch(e){target.failed=true;target.content=e?.code==='rate_limited'?'Troppe richieste ravvicinate: riprova tra un minuto.':e?.code==='not_granted'?'L’uso dell’assistente non è stato autorizzato per questa pagina.':(e?.text||'Non sono riuscito a rispondere. Riprova.')}
+  S.chatBusy=false;S.chatScroll=true;if(!target.failed)saveChat();renderChat();
 }
 
 /* ===== Azioni ===== */
@@ -1274,7 +1288,10 @@ Rispondi SOLO con JSON: {"offensiva":"","difensiva":"","transPos":"","transNeg":
   chatClose:()=>{S.chatOpen=false;renderChat();document.getElementById('fab').focus()},
   sugg:t=>chatSend(SUGG[Number(t.dataset.i)]),
   chatSend:()=>{const el=document.getElementById('chatIn');const v=el.value;el.value='';chatSend(v)},
-  chatClear:()=>{S.chat=[];renderChat()},
+  chatClear:()=>{S.chat=[];S.chatId=null;S.chatHist=false;renderChat();setTimeout(()=>document.getElementById('chatIn')?.focus(),0)},
+  chatHist:()=>{S.chatHist=!S.chatHist;S.chatScroll=true;renderChat()},
+  chatLoad:t=>{const c=S.chats[t.dataset.id];if(!c||S.chatBusy)return;S.chatId=c.id;S.chat=(c.messaggi||[]).map(m=>({...m}));S.chatHist=false;S.chatScroll=true;renderChat()},
+  chatDel:t=>{const id=t.dataset.id;delete S.chats[id];del('chat',id);if(S.chatId===id){S.chatId=null;S.chat=[]}renderChat()},
   bdTool:t=>{BD.tool=t.dataset.k;BD.sel=null;document.querySelectorAll('#bdTools button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===BD.tool));drawBoard()},
   bdUndo:()=>{const h=BD.hist.pop();if(h){BD.sc=JSON.parse(h);BD.sel=null;drawBoard()}},
   bdClear:()=>{bdPush();BD.sc.el=[];BD.sel=null;drawBoard()},
