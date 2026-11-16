@@ -322,12 +322,14 @@ async function aiGenerate(){
   const w=getWeek(S.weekStart);const t=team();const md=matchDayOf(w);
   const req=(document.getElementById('aiReq')?.value??S.ai?.req??'').trim();
   const free=document.getElementById('aiFree')?document.getElementById('aiFree').checked:!!S.ai?.free;
+  const dBox0=document.getElementById('aiDays');const pickedDays=dBox0?[...dBox0.querySelectorAll('input:checked')].map(i=>Number(i.value)):null;
+  if(S.ai){S.ai.days=pickedDays||S.ai.days;S.ai.req=req;S.ai.free=free}
   const gkBox=document.getElementById('aiGk');if(gkBox)w.gkCoach=[...gkBox.querySelectorAll('input:checked')].map(i=>Number(i.value));
   const pv=document.getElementById('aiPrev');if(pv){const o={};pv.querySelectorAll('input').forEach(i=>{const d=i.dataset.d;o[d]=o[d]||{};o[d][i.dataset.t]=Number(i.value)||0});w.previsti=o}
   const st=document.getElementById('aiStato');if(st){w.statoGruppo=st.value;w.obiettivoGruppo=(document.getElementById('aiObG')?.value||'').trim()}
   if(gkBox||pv||st)saveWeek({...w});
   const tutti=(t.giorni&&t.giorni.length?t.giorni:daysForSlots(t.sedute||3,md??6)).filter(d=>md==null||md===''||d!==Number(md));
-  const dBox=document.getElementById('aiDays');const giorni=dBox?[...dBox.querySelectorAll('input:checked')].map(i=>Number(i.value)):(S.ai?.days||tutti);
+  const giorni=pickedDays||(S.ai?.days||tutti);
   if(!giorni.length){toast('Scegli almeno una seduta da progettare');return}
   const kept=(w.sessioni||[]).filter(s=>!giorni.includes(s.giorno));
   const keptTxt=kept.length?`SEDUTE CHE RESTANO COME SONO (già svolte o già decise: non riprogettarle, ma tienine conto per carico, varietà e progressione): ${kept.map(s=>`${DAYS_FULL[s.giorno]} ${normMd(s.md)||''}${s.done?' (svolta'+(s.rpeReale?', RPE '+s.rpeReale:'')+')':''}: ${s.titolo} – ${(s.esercizi||[]).map(e=>e.nome).join(', ')}`).join(' | ')}`:'';
@@ -372,7 +374,7 @@ ${reqRule(req)}
 Una sessione per ciascun giorno indicato: attivazione + 2-3 esercizi (più un eventuale breve blocco condizionale) + la partita finale, durate che sommano a ${t.durata}'. Verifica i numeri di ogni esercizio.`;
   RULE_FREE=false;
   let plan;
-  try{plan=await S.sample.json(planPrompt,{modelTier:'complex',signal:ac.signal});if(!Array.isArray(plan?.sessioni)||!plan.sessioni.length)throw {code:'empty',message:'Il piano non contiene sedute.'};steps[0].state='ok';aiStepsUpd()}
+  try{plan=await S.sample.json(planPrompt,{modelTier:'complex',signal:ac.signal});if(!Array.isArray(plan?.sessioni)||!plan.sessioni.length)throw {code:'empty',message:'Il piano non contiene sedute.'};plan.sessioni=plan.sessioni.filter(x=>giorni.includes(Math.round(Number(x.giorno))));if(!plan.sessioni.length)throw {code:'empty',message:'Il piano non contiene le sedute richieste.'};steps[0].state='ok';aiStepsUpd()}
   catch(e){if(e&&(e.name==='AbortError'||e.code==='aborted')){S.ai={week:w.id,state:'form',req,days:giorni,free};render();return}S.ai={week:w.id,state:'error',req,days:giorni,free,msg:aiErrMsg(e)};render();return}
   const pianoTxt=JSON.stringify({obiettivo:plan.obiettivo,sessioni:plan.sessioni.map(s=>({giorno:s.giorno,titolo:s.titolo,focus:s.focus,esercizi:(s.esercizi||[]).map(e=>e.nome+' ('+e.durata+"')")}))});
   const detail=async(s,idx)=>{const stp=steps[idx+1]||{};
@@ -398,7 +400,7 @@ L'attivazione non ha schema; tutti gli altri esercizi sì.${reqRule(req)}`;
     const res={...plan,sessioni:plan.sessioni.map((s,i)=>{if(det[i])return {...s,esercizi:det[i]};failed.push(DAYS_FULL[s.giorno]);return {...s,esercizi:(s.esercizi||[]).map(e=>({...e,descrizione:e.idea||''}))}})};
     if(failed.length)res.note=(res.note?res.note+' ':'')+`Il dettaglio di ${failed.join(', ')} non è riuscito: ci sono gli esercizi del piano con disegni automatici, completali da Modifica o rigenera.`;
     RULE_FREE=free;const r=normalizeWeekAI(res,md);RULE_FREE=false;if(!r.sessioni.length)throw {code:'empty',message:'La proposta non contiene sedute valide.'};
-    r.sessioni=r.sessioni.filter(x=>giorni.includes(x.giorno));S.ai={week:w.id,state:'done',req,result:r,days:giorni,kept:kept.length,free};
+    r.sessioni=r.sessioni.filter(x=>giorni.includes(x.giorno));S.ai={week:w.id,state:'done',req,result:r,days:giorni,kept:kept.length||(giorni.length<tutti.length?1:0),free};
   }catch(e){
     RULE_FREE=false;if(e&&(e.name==='AbortError'||e.code==='aborted'))S.ai={week:w.id,state:'form',req,days:giorni,free};
     else S.ai={week:w.id,state:'error',req,days:giorni,free,msg:aiErrMsg(e)};
@@ -1370,6 +1372,7 @@ document.addEventListener('change',e=>{
     const k=Number(teamSel.value);if(k>=0){const tm=T.squadre[k];if(p&&p.ruolo==='POR')tm.portieri.push(pid);else{tm.ids.push(pid);tm.sub[subSel?subSel.value:'A'].push(pid)}}return}
   if(a==='exMode'&&ED){ED.s.esercizi[Number(t.dataset.i)].modoSquadre=t.value;persistED();drawEditor();return}
   if(t.id==='pPos1'){const r=repOf(t.value);const sel=document.getElementById('pRuolo');if(r&&sel)sel.value=r;return}
+  if(t.closest&&t.closest('#aiDays')&&S.ai){S.ai.days=[...document.querySelectorAll('#aiDays input:checked')].map(i=>Number(i.value));return}
   if(a==='adSel'){if(ED&&ED.adapt){const l=document.getElementById('adList');ED.adapt.sel=[...l.querySelectorAll('input:checked')].map(x=>x.value);const c=adaptCounts(ED.adapt.sel);const el=document.getElementById('adCount');if(el)el.innerHTML=`<b>${c.m}</b> di movimento + <b>${c.p}</b> portieri`}return}
   if(a==='plStato'){const p=S.players.find(x=>x.id===t.dataset.id);if(p){markReturn(p,p.stato,t.value);p.stato=t.value;const {id,...rest}=p;put('giocatori',id,rest);render()}}
 });
