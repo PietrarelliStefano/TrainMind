@@ -900,7 +900,7 @@ ${ctx}
 Rispondi SOLO con un oggetto JSON in italiano, conciso:
 {"obiettivo":"una frase","razionale":"2-3 frasi","note":"indicazioni pratiche su carico, disponibilità e organizzazione (niente lavori differenziati)","sessioni":[{"giorno":0,"titolo":"titolo breve","focus":"obiettivo della seduta","durata":${t.durata},"rpe":6,"condizionale":"lavoro fisico della seduta","esercizi":[{"nome":"","fase":"attivazione|iniziale|centrale|condizionale|finale","durata":10,"giocatori":"numeri esatti con totale","sistema":"nome del sistema o entrambi","idea":"1-2 frasi: cosa si fa e perché"}]}]}
 ${reqRule(req)}
-Una sessione per ciascun giorno indicato, ${t.strutturaSeduta&&!free?'con la STRUTTURA DELLA SEDUTA indicata dal mister':'attivazione + 2-3 esercizi (più un eventuale breve blocco condizionale) + la partita finale'}, durate che sommano a ${t.durata}'. Verifica i numeri di ogni esercizio.`;
+Una sessione per ciascun giorno indicato, ${t.strutturaSeduta&&!free?'con la STRUTTURA DELLA SEDUTA indicata dal mister':'attivazione + 2-3 esercizi (più un eventuale breve blocco condizionale) + la partita finale'}, ${t.strutturaSeduta&&!free?'con i minutaggi della struttura (seduta di '+t.durata+"' compresi pause e cambi)":'durate che sommano a '+t.durata+"'"}. Verifica i numeri di ogni esercizio.`;
   RULE_FREE=false;
   let plan;
   try{plan=await S.sample.json(planPrompt,{modelTier:'complex',signal:ac.signal});if(!Array.isArray(plan?.sessioni)||!plan.sessioni.length)throw {code:'empty',message:'Il piano non contiene sedute.'};plan.sessioni=plan.sessioni.filter(x=>giorni.includes(Math.round(Number(x.giorno))));if(!plan.sessioni.length)throw {code:'empty',message:'Il piano non contiene le sedute richieste.'};steps[0].state='ok';aiStepsUpd()}
