@@ -1065,6 +1065,7 @@ function vImpostazioni(){
   const fld=(id,l,v,ph)=>`<label class="f"><span>${l}</span><textarea id="${id}" placeholder="${esc(ph)}">${esc(v)}</textarea></label>`;
   return `<div class="head"><div><span class="lbl">Impostazioni</span><h1>Squadra e modello di gioco</h1><p class="sub">Il modello di gioco guida l'assistente: ogni esercizio viene progettato per allenare questi principi.</p></div><button class="btn pri" data-act="teamSave">Salva</button></div>
   ${window.TM_CLOUD?window.TM_CLOUD.card():''}
+  ${!window.TM_CLOUD&&S.db?`<div class="card stack"><h2>Backup</h2><div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn" data-act="backupDownload">Scarica un backup</button></div><p class="muted" style="font-size:.85rem">Un file con squadra, rosa, partite, settimane ed esercizi, nello stesso formato della versione online. Serve anche per passare a Trama (Squadra › Importa da TrainMind classic).</p></div>`:''}
   <div class="card stack"><h2>Squadra e calendario</h2>
     <div class="fgrid"><label class="f"><span>Nome squadra</span><input type="text" id="tNome" value="${esc(t.nome)}"></label><label class="f"><span>Categoria</span><input type="text" id="tCat" value="${esc(t.categoria)}"></label>
       <label class="f"><span>Livello</span><select id="tLiv">${['Professionisti','Semiprofessionisti','Dilettanti','Settore giovanile agonistico','Settore giovanile di base'].map(x=>`<option ${t.livello===x?'selected':''}>${x}</option>`).join('')}</select></label>
@@ -1290,6 +1291,11 @@ const ACT={
   plNoReturn:t=>{const p=S.players.find(x=>x.id===t.dataset.id);if(!p)return;delete p.rientratoIl;delete p.rientratoDa;const {id,...rest}=p;put('giocatori',id,{...rest,rientratoIl:null,rientratoDa:null});closeDlg();render();toast(cogNome(p)+': tolta la segnalazione di rientro')},
   plDel:t=>{S.players=S.players.filter(p=>p.id!==t.dataset.id);del('giocatori',t.dataset.id);closeDlg();render()},
   mEdit:t=>mDialog(t.dataset.id),
+  backupDownload:async()=>{const strip=o=>{const {id,...rest}=o;return rest};const by=a=>Object.fromEntries(a.map(x=>[x.id,strip(x)]));
+    const collections={squadra:{...(S.team?{info:S.team}:{}),...(S.classifica?{classifica:S.classifica}:{})},giocatori:by(S.players),partite:by(S.matches),settimane:Object.fromEntries(Object.values(S.weeks).map(w=>[w.id,strip(w)])),esercizi:by(S.drills),chat:Object.fromEntries(Object.values(S.chats||{}).map(c=>[c.id,strip(c)]))};
+    const out={app:'TrainMind',v:1,esportato:new Date().toISOString(),collections};const filename='trainmind-backup-'+todayIso()+'.json';
+    const blob=new Blob([JSON.stringify(out)],{type:'application/json'});
+    try{if(S.downloads)await S.downloads.save({filename,data:blob});else{const url=URL.createObjectURL(blob);const a=Object.assign(document.createElement('a'),{href:url,download:filename});document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000)}toast('Backup scaricato')}catch(e){toast('Backup non riuscito, riprova')}},
   mSave:t=>{const g=id=>document.getElementById(id).value;if(!g('mAvv').trim()||!g('mData'))return toast('Inserisci data e avversario');const id=t.dataset.id||uid();const old=S.matches.find(x=>x.id===id)||{};
     const gf=g('mGF'),gs=g('mGS');const m={...old,data:g('mData'),ora:g('mOra'),giornata:g('mGiorn'),luogo:g('mLuogo'),avversario:g('mAvv').trim(),competizione:g('mComp'),casa:g('mCasa')==='1',giocata:g('mGioc')==='1'||(gf!==''&&gs!==''),golFatti:gf,golSubiti:gs,analisi:g('mAn')};delete m.id;
     const i=S.matches.findIndex(x=>x.id===id);if(i>=0)S.matches[i]={...m,id};else S.matches.push({...m,id});put('partite',id,m);
